@@ -1,0 +1,21 @@
+import { UAParser } from 'ua-parser-js';
+
+const GetDeviceInfo = () => {
+  const parser = new UAParser();
+  const result = parser.getResult();
+
+  const rawId = `${result.browser.name}-${result.os.name}-${result.device.type || 'Desktop'}`;
+  const deviceId = btoa(rawId);
+
+  return {
+    deviceId,
+    browser: result.browser.name,
+    browserVersion: result.browser.version,
+    os: result.os.name,
+    osVersion: result.os.version,
+    deviceType: result.device.type || 'Desktop',
+    date: new Date(),
+  };
+};
+
+export default GetDeviceInfo;

@@ -9,26 +9,68 @@ import CssBaseline from '@mui/material/CssBaseline';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import LogoutIcon from '@mui/icons-material/Logout';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import InputBase from '@mui/material/InputBase';
+import Badge from '@mui/material/Badge';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
 import { useAuth } from '../auth/AuthProvider';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import logo from '../public/logo.png';
-import { ExpandLess, ExpandMore, Menu as MenuIcon } from '@mui/icons-material';
 import DashboardFooter from './DashboardFooter';
 
+// Import Lucide React icons
+import {
+  LogOut,
+  User,
+  Settings,
+  MoreVertical,
+  Menu as MenuIcon,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Bell,
+  HelpCircle,
+  Home,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Tag,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Phone,
+  Calendar,
+  MapPin,
+  Clock,
+  Mail,
+  Shield,
+  UserCog,
+  Filter,
+  X,
+  Edit,
+  Camera,
+  ShieldCheck,
+  Briefcase,
+} from 'lucide-react';
+
 const drawerWidth = 250;
-const closedDrawerWidth = 70;
-const mobileDrawerWidth = 250;
+const closedDrawerWidth = 60;
+const mobileDrawerWidth = 230;
 
 const openedMixin = (theme) => ({
   width: drawerWidth,
@@ -67,16 +109,15 @@ const DrawerHeader = styled('div')(({ theme }) => ({
   alignItems: 'center',
   justifyContent: 'center',
   padding: theme.spacing(0, 0.5),
-  minHeight: 56,
+  minHeight: 52,
   flexShrink: 0,
 }));
 
 const AppBar = styled(MuiAppBar, {
   shouldForwardProp: (prop) => prop !== 'open',
 })(({ theme, open }) => ({
-  backgroundColor: '#ffffff',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  borderBottom: '1px solid rgba(0,0,0,0.06)',
+  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+  borderBottom: '1px solid rgba(0,0,0,0.08)',
   transition: theme.transitions.create(['width', 'margin'], {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
@@ -127,6 +168,429 @@ const ScrollableBox = styled(Box)({
   scrollbarWidth: 'none',
 });
 
+// Search component styled like in the image
+const SearchContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  backgroundColor: '#f8fafc',
+  border: '1px solid rgba(0,0,0,0.08)',
+  borderRadius: '5px',
+  padding: '2px 10px',
+  width: '280px',
+  transition: 'all 0.2s ease',
+  '&:hover': {
+    borderColor: '#3182ce',
+    backgroundColor: '#ffffff',
+  },
+  '&:focus-within': {
+    borderColor: '#3182ce',
+    backgroundColor: '#ffffff',
+    boxShadow: '0 0 0 2px rgba(49, 130, 206, 0.1)',
+  },
+}));
+
+const SearchInput = styled(InputBase)(({ theme }) => ({
+  color: '#4a5568',
+  fontSize: '0.8rem',
+  width: '100%',
+  '& .MuiInputBase-input': {
+    padding: '6px 0 6px 6px',
+    fontSize: '0.8rem',
+    '&::placeholder': {
+      color: '#a0aec0',
+      opacity: 1,
+      fontSize: '0.8rem',
+    },
+  },
+}));
+
+// Badge styled like in the image
+const KBadge = styled(Box)(({ theme }) => ({
+  backgroundColor: '#3182ce',
+  color: '#ffffff',
+  borderRadius: '5px',
+  width: '26px',
+  height: '26px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '0.8rem',
+  fontWeight: 600,
+  marginLeft: '10px',
+}));
+
+// Function to generate breadcrumb from path
+const generateBreadcrumb = (path) => {
+  // Remove leading slash and split by '/'
+  const pathParts = path.replace(/^\/+/, '').split('/').filter(Boolean);
+
+  // If we're on a dashboard page (manager-dashboard, superadmin-dashboard, tech-dashboard)
+  // Start from there instead of adding "Dashboard"
+  const breadcrumbItems = pathParts.map((part, index) => {
+    // Decode URL encoded characters
+    const decodedPart = decodeURIComponent(part);
+
+    // Convert to display format (replace hyphens with spaces, capitalize)
+    const displayName = decodedPart
+      .replace(/-/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+    return {
+      name: displayName,
+      path: '/' + pathParts.slice(0, index + 1).join('/'),
+      isLast: index === pathParts.length - 1
+    };
+  });
+
+  // Don't add "Dashboard" if we're already on a dashboard page
+  // Start from the dashboard page itself
+  return breadcrumbItems;
+};
+
+// Function to get page title from path
+const getPageTitle = (path) => {
+  const pathParts = path.replace(/^\/+/, '').split('/').filter(Boolean);
+
+  if (pathParts.length === 0) {
+    return 'Dashboard';
+  }
+
+  const lastPart = pathParts[pathParts.length - 1];
+  const decodedPart = decodeURIComponent(lastPart);
+
+  return decodedPart
+    .replace(/-/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// Profile Dialog Component
+// Profile Dialog Component
+const ProfileDialog = ({ open, onClose, user, userRole }) => {
+  const theme = useTheme();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  if (!user) return null;
+
+  // Function to get the dashboard base path
+  const getDashboardBasePath = () => {
+    const currentPath = location.pathname;
+
+    // Check which dashboard we're on
+    if (currentPath.startsWith('/superadmin-dashboard')) {
+      return '/superadmin-dashboard';
+    } else if (currentPath.startsWith('/manager-dashboard')) {
+      return '/manager-dashboard';
+    } else if (currentPath.startsWith('/tech-dashboard')) {
+      return '/tech-dashboard';
+    }
+
+    // Default fallback based on role
+    switch (userRole?.toUpperCase()) {
+      case 'SUPERADMIN':
+        return '/superadmin-dashboard';
+      case 'MANAGER':
+        return '/manager-dashboard';
+      case 'TECH':
+        return '/tech-dashboard';
+      default:
+        return '/';
+    }
+  };
+
+  const getRoleColor = (role) => {
+    switch (role?.toUpperCase()) {
+      case 'SUPERADMIN':
+        return '#dc2626'; // red-600
+      case 'MANAGER':
+        return '#059669'; // green-600
+      case 'TECH':
+        return '#2563eb'; // blue-600
+      default:
+        return '#6b7280'; // gray-500
+    }
+  };
+
+  const getRoleLabel = (role) => {
+    switch (role?.toUpperCase()) {
+      case 'SUPERADMIN':
+        return 'Super Admin';
+      case 'MANAGER':
+        return 'Manager';
+      case 'TECH':
+        return 'Technician';
+      default:
+        return 'User';
+    }
+  };
+
+  const getRoleIcon = (role) => {
+    switch (role?.toUpperCase()) {
+      case 'SUPERADMIN':
+        return <ShieldCheck size={18} />;
+      case 'MANAGER':
+        return <Briefcase size={18} />;
+      case 'TECH':
+        return <UserCog size={18} />;
+      default:
+        return <User size={18} />;
+    }
+  };
+
+  const handleEditProfile = () => {
+    const basePath = getDashboardBasePath();
+    onClose();
+    navigate(`${basePath}/profile`);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        sx: {
+          bgcolor: '#ffffff',
+          borderRadius: '8px',
+          border: '1px solid rgba(0,0,0,0.08)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        }
+      }}
+    >
+      <DialogTitle sx={{
+        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        pb: 2,
+        position: 'relative',
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              width: 40,
+              height: 40,
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: alpha('#3182ce', 0.1),
+              color: '#3182ce',
+            }}>
+              <User size={20} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{
+                color: '#1a202c',
+                fontSize: '1rem',
+                fontWeight: 600,
+                lineHeight: 1.2,
+              }}>
+                User Profile
+              </Typography>
+              <Typography variant="caption" sx={{
+                color: '#718096',
+                fontSize: '0.75rem',
+                fontWeight: 400,
+              }}>
+                View and manage your profile information
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton
+            onClick={onClose}
+            size="small"
+            sx={{
+              color: '#718096',
+              '&:hover': {
+                backgroundColor: alpha('#718096', 0.1),
+                color: '#4a5568',
+              },
+            }}
+          >
+            <X size={18} />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+
+      <DialogContent sx={{ pt: 3, pb: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
+          {/* Profile Avatar */}
+          <Box sx={{ position: 'relative', mb: 0 }}>
+            <Avatar
+              sx={{
+                width: 100,
+                height: 100,
+                bgcolor: '#3182ce',
+                color: '#ffffff',
+                fontSize: '2rem',
+                fontWeight: 600,
+                border: '4px solid #ffffff',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}
+            >
+              {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}
+            </Avatar>
+          </Box>
+
+          {/* User Name */}
+          <Typography variant="h5" sx={{
+            color: '#1a202c',
+            fontSize: '1.25rem',
+            fontWeight: 600,
+            mb: 0.5,
+          }}>
+            {user?.name || 'Jenny Wilson'}
+          </Typography>
+
+          {/* Role Badge */}
+          <Chip
+            icon={getRoleIcon(userRole)}
+            label={getRoleLabel(userRole)}
+            sx={{
+              backgroundColor: alpha(getRoleColor(userRole), 0.1),
+              color: getRoleColor(userRole),
+              border: `1px solid ${alpha(getRoleColor(userRole), 0.3)}`,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              height: '28px',
+              mb: 3,
+              '& .MuiChip-icon': {
+                color: getRoleColor(userRole),
+                marginLeft: '8px',
+              },
+            }}
+          />
+        </Box>
+
+        {/* Profile Details */}
+        <Box sx={{
+          backgroundColor: '#f8fafc',
+          borderRadius: '8px',
+          p: 2.5,
+          mb: 2,
+        }}>
+          <Typography variant="subtitle2" sx={{
+            color: '#4a5568',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+          }}>
+            <User size={14} />
+            Personal Information
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Email */}
+            <Box>
+              <Typography variant="caption" sx={{
+                color: '#718096',
+                fontSize: '0.7rem',
+                fontWeight: 500,
+                mb: 0.5,
+                display: 'block',
+              }}>
+                Email Address
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Mail size={14} color="#718096" />
+                <Typography variant="body2" sx={{
+                  color: '#1a202c',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                }}>
+                  {user?.email || 'jennywilson@gmail.com'}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Role */}
+            <Box>
+              <Typography variant="caption" sx={{
+                color: '#718096',
+                fontSize: '0.7rem',
+                fontWeight: 500,
+                mb: 0.5,
+                display: 'block',
+              }}>
+                Account Role
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Shield size={14} color="#718096" />
+                <Typography variant="body2" sx={{
+                  color: '#1a202c',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                }}>
+                  {getRoleLabel(userRole)}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Member Since */}
+            <Box>
+              <Typography variant="caption" sx={{
+                color: '#718096',
+                fontSize: '0.7rem',
+                fontWeight: 500,
+                mb: 0.5,
+                display: 'block',
+              }}>
+                Member Since
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Calendar size={14} color="#718096" />
+                <Typography variant="body2" sx={{
+                  color: '#1a202c',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                }}>
+                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  }) : 'January 2024'}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </DialogContent>
+
+      <DialogActions sx={{
+        p: 2.5,
+        pt: 2,
+        borderTop: '1px solid rgba(0,0,0,0.06)',
+        justifyContent: 'space-between',
+      }}>
+        <Button
+          onClick={handleEditProfile}
+          variant="outlined"
+          startIcon={<Edit size={16} />}
+          sx={{
+            textTransform: 'none',
+            fontSize: '0.85rem',
+            fontWeight: 500,
+            color: '#3182ce',
+            borderColor: '#cbd5e0',
+            '&:hover': {
+              borderColor: '#3182ce',
+              backgroundColor: alpha('#3182ce', 0.04),
+            },
+          }}
+        >
+          Edit Profile
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 export default function DashboardLayout({ children, title, menuItems }) {
   const theme = useTheme();
   const { user, logout } = useAuth();
@@ -136,6 +600,9 @@ export default function DashboardLayout({ children, title, menuItems }) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [open, setOpen] = React.useState(!isMobile);
+  const [menuAnchorEl, setMenuAnchorEl] = React.useState(null);
+  const [drawerMenuAnchorEl, setDrawerMenuAnchorEl] = React.useState(null);
+  const [profileDialogOpen, setProfileDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     setOpen(!isMobile);
@@ -145,6 +612,25 @@ export default function DashboardLayout({ children, title, menuItems }) {
 
   const getInitials = (name) =>
     name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
+
+  // Generate breadcrumb from current path
+  const breadcrumbItems = generateBreadcrumb(location.pathname);
+
+  // Get user role from localStorage or user object
+  const getUserRole = () => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        return parsed.role || parsed.userType || 'USER';
+      }
+    } catch (error) {
+      console.error('Error parsing user data from localStorage:', error);
+    }
+    return 'USER';
+  };
+
+  const userRole = getUserRole();
 
   // Enhanced route matching logic
   const isRouteActive = (path) => {
@@ -178,7 +664,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
       return {
         color: '#ffffff !important',
         backgroundColor: alpha('#ffffff', 0.15),
-        borderLeft: '3px solid #63b3ed',
+        borderLeft: '2px solid #63b3ed',
         '& .MuiListItemIcon-root': {
           color: '#ffffff',
         },
@@ -186,7 +672,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
           backgroundColor: alpha('#ffffff', 0.2),
           color: '#ffffff !important',
         },
-        borderRadius: '0 6px 6px 0',
+        borderRadius: '0 5px 5px 0',
         transition: 'all 0.15s ease',
         mx: 0.5,
         my: 0.25,
@@ -206,14 +692,44 @@ export default function DashboardLayout({ children, title, menuItems }) {
           color: '#ffffff',
         },
       },
-      borderRadius: '0 6px 6px 0',
+      borderRadius: '0 5px 5px 0',
       transition: 'all 0.15s ease',
       mx: 0.5,
       my: 0.25,
     };
   };
 
+  const handleMenuOpen = (event) => {
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleDrawerMenuOpen = (event) => {
+    setDrawerMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleDrawerMenuClose = () => {
+    setDrawerMenuAnchorEl(null);
+  };
+
+  const handleProfileClick = () => {
+    setProfileDialogOpen(true);
+    handleMenuClose();
+    handleDrawerMenuClose();
+  };
+
+  const handleSettings = () => {
+    navigate('/settings');
+    handleMenuClose();
+    handleDrawerMenuClose();
+  };
+
   const handleLogout = () => {
+    handleMenuClose();
+    handleDrawerMenuClose();
     logout();
     navigate('/login');
   };
@@ -223,6 +739,17 @@ export default function DashboardLayout({ children, title, menuItems }) {
     if (isMobile) {
       setOpen(false);
     }
+  };
+
+  // Handle breadcrumb navigation
+  const handleBreadcrumbClick = (path) => {
+    if (path) {
+      navigate(path);
+    }
+  };
+
+  const handleProfileDialogClose = () => {
+    setProfileDialogOpen(false);
   };
 
   const renderDrawerContent = () => (
@@ -254,14 +781,14 @@ export default function DashboardLayout({ children, title, menuItems }) {
               src={logo}
               alt="Logo"
               style={{
-                width: '160px',
+                width: '140px',
                 height: 'auto',
               }}
             />
           ) : (
             <Box sx={{
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -270,7 +797,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 src={logo}
                 alt="Logo"
                 style={{
-                  width: '32px',
+                  width: '28px',
                   height: 'auto',
                   filter: 'brightness(0) invert(1)'
                 }}
@@ -292,14 +819,14 @@ export default function DashboardLayout({ children, title, menuItems }) {
             {open && section.sectionName && (
               <Box sx={{
                 px: 2.5,
-                py: 1,
-                mb: 0.5,
+                py: 0.75,
+                mb: 0.25,
               }}>
                 <Typography
                   variant="caption"
                   sx={{
                     color: alpha('#ffffff', 0.6),
-                    fontSize: '0.7rem',
+                    fontSize: '0.65rem',
                     fontWeight: 600,
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
@@ -323,16 +850,16 @@ export default function DashboardLayout({ children, title, menuItems }) {
                     sx={[
                       getActiveStyles(item.path),
                       {
-                        minHeight: 44,
+                        minHeight: 40,
                         flexDirection: open ? 'row' : 'column',
                         justifyContent: open ? 'flex-start' : 'center',
                         alignItems: 'center',
-                        gap: open ? 1.5 : 0.25,
-                        px: open ? 2.5 : 1.5,
-                        py: open ? 0.75 : 1,
+                        gap: open ? 1.25 : 0.25,
+                        px: open ? 2.25 : 1.25,
+                        py: open ? 0.5 : 0.75,
                         '& .MuiListItemIcon-root': {
                           minWidth: 0,
-                          mr: open ? 1.5 : 0,
+                          mr: open ? 1.25 : 0,
                           justifyContent: 'center',
                         },
                         '& .MuiListItemText-root': {
@@ -340,14 +867,15 @@ export default function DashboardLayout({ children, title, menuItems }) {
                         },
                       },
                       isExpandable && {
-                        pr: 1.5,
+                        pr: 1.25,
                       }
                     ]}
                   >
                     <ListItemIcon>
                       {React.cloneElement(item.icon, {
                         sx: {
-                          fontSize: 20,
+                          width: 18,
+                          height: 18,
                           color: 'inherit',
                         }
                       })}
@@ -356,7 +884,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                       <ListItemText
                         primary={
                           <Typography sx={{
-                            fontSize: '0.85rem',
+                            fontSize: '0.8rem',
                             fontWeight: 500,
                             lineHeight: 1.2,
                             color: 'inherit',
@@ -372,7 +900,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                     )}
                     {!open && (
                       <Typography sx={{
-                        fontSize: '0.6rem',
+                        fontSize: '0.55rem',
                         fontWeight: 500,
                         lineHeight: 1.2,
                         mt: 0.25,
@@ -390,7 +918,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                         color: 'inherit',
                         opacity: 0.7
                       }}>
-                        {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </ListItemIcon>
                     )}
                   </ListItemButton>
@@ -408,9 +936,9 @@ export default function DashboardLayout({ children, title, menuItems }) {
                       tooltip: {
                         sx: {
                           backgroundColor: '#2d3748',
-                          fontSize: '0.8rem',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
+                          fontSize: '0.75rem',
+                          padding: '3px 6px',
+                          borderRadius: '3px',
                         }
                       },
                       arrow: {
@@ -439,7 +967,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                     {isExpandable && isExpanded && item.subItems && open && (
                       <List sx={{
                         py: 0,
-                        pl: 3.5,
+                        pl: 3,
                         backgroundColor: alpha('#000000', 0.1)
                       }}>
                         {item.subItems.map((subItem) => (
@@ -455,34 +983,34 @@ export default function DashboardLayout({ children, title, menuItems }) {
                               sx={[
                                 getActiveStyles(subItem.path),
                                 {
-                                  minHeight: 40,
-                                  px: 2.5,
-                                  py: 0.5,
+                                  minHeight: 36,
+                                  px: 2,
+                                  py: 0.25,
                                   ml: 1,
                                   '&:hover': {
                                     backgroundColor: alpha('#ffffff', 0.1),
                                   },
                                   '& .MuiTypography-root': {
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.75rem',
                                   }
                                 }
                               ]}
                             >
                               {subItem.icon && (
                                 <ListItemIcon sx={{
-                                  minWidth: 30,
+                                  minWidth: 28,
                                   color: 'inherit',
                                   opacity: 0.8
                                 }}>
                                   {React.cloneElement(subItem.icon, {
-                                    sx: { fontSize: 18 }
+                                    sx: { width: 16, height: 16 }
                                   })}
                                 </ListItemIcon>
                               )}
                               <ListItemText
                                 primary={
                                   <Typography sx={{
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 400,
                                     color: 'inherit',
                                     whiteSpace: 'nowrap',
@@ -506,65 +1034,180 @@ export default function DashboardLayout({ children, title, menuItems }) {
         ))}
       </ScrollableBox>
 
-      {/* Logout button at bottom */}
+      {/* User Profile Section at bottom - Now clickable */}
       <Box sx={{
-        p: 1.5,
-        borderTop: `1px solid ${alpha('#ffffff', 0.15)}`,
-        flexShrink: 0
+        p: open ? 1.25 : 0.75,
+        flexShrink: 0,
       }}>
-        <ListItemButton
-          onClick={handleLogout}
-          sx={{
-            color: alpha('#ffffff', 0.85),
-            backgroundColor: 'transparent',
-            borderRadius: '6px',
-            '&:hover': {
-              backgroundColor: alpha('#ffffff', 0.1),
-              color: '#ffffff',
-            },
-            flexDirection: open ? 'row' : 'column',
-            justifyContent: open ? 'flex-start' : 'center',
-            alignItems: 'center',
-            gap: open ? 1.5 : 0.25,
-            px: open ? 2 : 1.5,
-            py: 0.75,
-            minHeight: 44,
-          }}
-        >
-          <ListItemIcon sx={{
-            minWidth: 0,
-            mr: open ? 1.5 : 0,
-            justifyContent: 'center',
-            color: 'inherit',
-          }}>
-            <LogoutIcon sx={{ fontSize: 20 }} />
-          </ListItemIcon>
-          {open && (
-            <ListItemText
-              primary="Logout"
-              primaryTypographyProps={{
-                sx: {
-                  fontSize: '0.85rem',
-                  fontWeight: 500,
-                  color: 'inherit',
-                  letterSpacing: '0.01em',
-                }
-              }}
-            />
-          )}
-          {!open && (
-            <Typography sx={{
-              fontSize: '0.6rem',
-              fontWeight: 500,
-              mt: 0.25,
-              textAlign: 'center',
-              color: 'inherit',
-              letterSpacing: '0.01em',
+        {open ? (
+          // Expanded view with user info - Now clickable
+          <Box
+            onClick={handleProfileClick}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              cursor: 'pointer',
+              p: 1.2,
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              border: `1px solid ${alpha('#ffffff', 0.3)}`,
+              '&:hover': {
+                backgroundColor: alpha('#ffffff', 0.1),
+              },
+            }}
+          >
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.25,
+              flex: 1,
+              minWidth: 0,
             }}>
-              Out
-            </Typography>
-          )}
-        </ListItemButton>
+              <Avatar
+                sx={{
+                  width: 36,
+                  height: 36,
+                  bgcolor: '#63b3ed',
+                  color: '#ffffff',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                }}
+              >
+                {getInitials(user?.name)}
+              </Avatar>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {user?.name || 'Jenny Wilson'}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: alpha('#ffffff', 0.7),
+                    fontSize: '0.7rem',
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: 'block',
+                  }}
+                >
+                  {user?.email || 'jennywilson@gmail.com'}
+                </Typography>
+              </Box>
+            </Box>
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDrawerMenuOpen(e);
+              }}
+              sx={{
+                color: alpha('#ffffff', 0.7),
+                width: 28,
+                height: 28,
+                '&:hover': {
+                  backgroundColor: alpha('#ffffff', 0.15),
+                  color: '#ffffff',
+                },
+              }}
+            >
+              <MoreVertical size={18} />
+            </IconButton>
+            <Menu
+              anchorEl={drawerMenuAnchorEl}
+              open={Boolean(drawerMenuAnchorEl)}
+              onClose={handleDrawerMenuClose}
+              PaperProps={{
+                sx: {
+                  mt: 0.5,
+                  minWidth: 150,
+                  backgroundColor: '#2d3748',
+                  backgroundImage: 'linear-gradient(135deg, #1a365d 0%, #2c5282 100%)',
+                  color: '#ffffff',
+                  border: `1px solid ${alpha('#ffffff', 0.1)}`,
+                  '& .MuiMenuItem-root': {
+                    fontSize: '0.8rem',
+                    py: 0.5,
+                    px: 1.25,
+                    color: alpha('#ffffff', 0.9),
+                    '&:hover': {
+                      backgroundColor: alpha('#ffffff', 0.15),
+                      color: '#ffffff',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'inherit',
+                      minWidth: 32,
+                    },
+                  },
+                },
+              }}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            >
+              <MenuItem onClick={handleProfileClick}>
+                <ListItemIcon>
+                  <User size={16} />
+                </ListItemIcon>
+                Profile
+              </MenuItem>
+              <Divider sx={{
+                my: 0.5,
+                borderColor: alpha('#ffffff', 0.1),
+                backgroundColor: alpha('#ffffff', 0.1)
+              }} />
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon>
+                  <LogOut size={16} />
+                </ListItemIcon>
+                Logout
+              </MenuItem>
+            </Menu>
+          </Box>
+        ) : (
+          // Collapsed view - just avatar (clickable)
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <IconButton
+              onClick={handleProfileClick}
+              sx={{
+                color: '#ffffff',
+                width: 36,
+                height: 36,
+                '&:hover': {
+                  backgroundColor: alpha('#ffffff', 0.1),
+                },
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: '#63b3ed',
+                  color: '#ffffff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                }}
+              >
+                {getInitials(user?.name)}
+              </Avatar>
+            </IconButton>
+          </Box>
+        )}
       </Box>
     </Box>
   );
@@ -587,121 +1230,281 @@ export default function DashboardLayout({ children, title, menuItems }) {
       >
         <Toolbar sx={{
           minHeight: 56,
-          px: { xs: 1.5, sm: 2.5 },
+          px: { xs: 1.25, sm: 2.5 },
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}>
-          {!isMobile ? (
-            <IconButton
-              onClick={handleDrawerToggle}
-              edge="start"
-              sx={{
-                marginLeft: open ? -2 : 4.5,
-                marginRight: 1.5,
-                width: 32,
-                height: 32,
-                background: 'linear-gradient(135deg, #1565C0 0%, #1976D2 100%)',
-                color: '#ffffff',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #0D47A1 0%, #1565C0 100%)',
-                },
-              }}
-            >
-              {open ? (
-                theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />
-              ) : (
-                theme.direction === 'rtl' ? <ChevronLeftIcon /> : <ChevronRightIcon />
-              )}
-            </IconButton>
-          ) : (
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              onClick={handleDrawerToggle}
-              edge="start"
-              sx={{
-                mr: 1.5,
-                color: '#3182ce',
-              }}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
+          {/* Left section with menu toggle and breadcrumb */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {!isMobile ? (
+              <IconButton
+                onClick={handleDrawerToggle}
+                edge="start"
+                sx={{
+                  marginLeft: open ? -1.5 : 4,
+                  width: 32,
+                  height: 32,
+                  borderRadius: '5px',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  backgroundColor: '#f8fafc',
+                  color: '#4a5568',
+                  '&:hover': {
+                    backgroundColor: '#edf2f7',
+                    borderColor: '#cbd5e0',
+                  },
+                }}
+              >
+                {open ? (
+                  <ChevronLeft size={18} />
+                ) : (
+                  <ChevronRight size={18} />
+                )}
+              </IconButton>
+            ) : (
+              <IconButton
+                color="inherit"
+                aria-label="open drawer"
+                onClick={handleDrawerToggle}
+                edge="start"
+                sx={{
+                  color: '#4a5568',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '5px',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  '&:hover': {
+                    backgroundColor: '#edf2f7',
+                  },
+                }}
+              >
+                <MenuIcon size={18} />
+              </IconButton>
+            )}
 
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography
-              variant="h6"
-              noWrap
-              sx={{
-                fontWeight: 600,
-                color: '#2d3748',
-                fontSize: { xs: '0.95rem', sm: '1.05rem' },
-                lineHeight: 1.2,
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Sterling Septic & Plumbing
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: '#718096',
-                fontWeight: 400,
-                fontSize: { xs: '0.75rem', sm: '0.8rem' },
-                letterSpacing: '0.01em',
-              }}
-            >
-              {title || 'Dashboard'}
-            </Typography>
+            {/* Dynamic Breadcrumb section with Lucide ChevronRight */}
+            <Box>
+              <Typography
+                variant="h6"
+                noWrap
+                sx={{
+                  fontWeight: 600,
+                  color: '#2d3748',
+                  fontSize: '0.95rem',
+                  lineHeight: 1.2,
+                  letterSpacing: '-0.01em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                }}
+              >
+                {breadcrumbItems.map((item, index) => (
+                  <React.Fragment key={item.path || `item-${index}`}>
+                    {index > 0 && (
+                      <Box
+                        component="span"
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mx: 0.5,
+                        }}
+                      >
+                        <ChevronRight size={14} color="#a0aec0" />
+                      </Box>
+                    )}
+                    <Box
+                      component="span"
+                      onClick={() => !item.isLast && handleBreadcrumbClick(item.path)}
+                      sx={{
+                        color: item.isLast ? '#3182ce' : '#4a5568',
+                        cursor: item.isLast ? 'default' : 'pointer',
+                        fontSize: '0.95rem',
+                        fontWeight: item.isLast ? 600 : 500,
+                        '&:hover': !item.isLast ? {
+                          color: '#3182ce',
+                          textDecoration: 'underline',
+                        } : {},
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.25,
+                      }}
+                    >
+                      {item.name}
+                      {item.isLast && (
+                        <Box sx={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: '50%',
+                          backgroundColor: '#3182ce',
+                          ml: 0.5,
+                        }} />
+                      )}
+                    </Box>
+                  </React.Fragment>
+                ))}
+              </Typography>
+            </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Chip
-              avatar={
-                <Avatar sx={{
-                  width: 28,
-                  height: 28,
-                  fontSize: '0.7rem',
-                  bgcolor: '#3182ce',
-                  color: '#ffffff',
-                  fontWeight: 600,
-                }}>
-                  {getInitials(user?.name)}
-                </Avatar>
-              }
-              label={user?.name}
-              variant="outlined"
-              sx={{
-                borderColor: alpha('#3182ce', 0.2),
-                backgroundColor: alpha('#3182ce', 0.04),
-                color: '#2d3748',
-                height: 36,
-                '& .MuiChip-label': {
-                  fontSize: '0.8rem',
-                  fontWeight: 500,
-                  px: 1,
-                  py: 0.5,
-                },
-                '&:hover': {
-                  borderColor: '#3182ce',
-                  backgroundColor: alpha('#3182ce', 0.08),
-                },
-                display: { xs: 'none', sm: 'flex' },
-              }}
-            />
+          {/* Right section with search and icons */}
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            flex: 1,
+            justifyContent: 'flex-end',
+            maxWidth: '550px'
+          }}>
+            {/* Search Container - styled like in the image */}
+            <SearchContainer>
+              <Search size={16} color="#a0aec0" />
+              <SearchInput
+                placeholder="Q Search"
+                inputProps={{ 'aria-label': 'search' }}
+              />
+            </SearchContainer>
+            {/* Notification icon */}
             <IconButton
-              onClick={handleLogout}
-              title="Logout"
               sx={{
                 color: '#718096',
+                backgroundColor: '#f8fafc',
+                borderRadius: '5px',
+                border: '1px solid rgba(0,0,0,0.08)',
+                width: 32,
+                height: 32,
                 '&:hover': {
-                  backgroundColor: alpha('#3182ce', 0.08),
+                  backgroundColor: '#edf2f7',
                   color: '#3182ce',
                 },
-                width: 36,
-                height: 36,
               }}
             >
-              <LogoutIcon sx={{ fontSize: 20 }} />
+              <Badge
+                badgeContent={3}
+                color="error"
+                sx={{
+                  '& .MuiBadge-badge': {
+                    fontSize: '0.55rem',
+                    height: '14px',
+                    minWidth: '14px',
+                  }
+                }}
+              >
+                <Bell size={16} />
+              </Badge>
             </IconButton>
+            {/* User avatar with menu */}
+            <IconButton
+              onClick={handleMenuOpen}
+              sx={{
+                p: 0.5,
+                borderRadius: '5px',
+                border: '1px solid rgba(0,0,0,0.08)',
+                backgroundColor: '#f8fafc',
+                '&:hover': {
+                  backgroundColor: '#edf2f7',
+                },
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: '#3182ce',
+                  color: '#ffffff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                }}
+              >
+                {getInitials(user?.name)}
+              </Avatar>
+            </IconButton>
+
+            <Menu
+              anchorEl={menuAnchorEl}
+              open={Boolean(menuAnchorEl)}
+              onClose={handleMenuClose}
+              PaperProps={{
+                sx: {
+                  mt: 0.5,
+                  minWidth: 160,
+                  backgroundColor: '#ffffff',
+                  color: '#2d3748',
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                  '& .MuiMenuItem-root': {
+                    fontSize: '0.8rem',
+                    py: 0.5,
+                    px: 1.25,
+                    color: '#4a5568',
+                    '&:hover': {
+                      backgroundColor: '#f7fafc',
+                      color: '#2d3748',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'inherit',
+                      minWidth: 32,
+                    },
+                  },
+                },
+              }}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            >
+              <Box sx={{
+                px: 1.25,
+                py: 0.75,
+                borderBottom: '1px solid rgba(0,0,0,0.06)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}>
+                <Avatar
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    bgcolor: '#3182ce',
+                    color: '#ffffff',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  {getInitials(user?.name)}
+                </Avatar>
+                <Box>
+                  <Typography variant="subtitle2" sx={{
+                    fontWeight: 600,
+                    color: '#2d3748',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.2,
+                  }}>
+                    {user?.name || 'Jenny Wilson'}
+                  </Typography>
+                  <Typography variant="caption" sx={{
+                    color: '#718096',
+                    fontSize: '0.7rem',
+                    lineHeight: 1.2,
+                  }}>
+                    {user?.email || 'jennywilson@gmail.com'}
+                  </Typography>
+                </Box>
+              </Box>
+              <MenuItem onClick={handleProfileClick}>
+                <ListItemIcon>
+                  <User size={16} />
+                </ListItemIcon>
+                <Typography sx={{ fontSize: '0.8rem' }}>Profile</Typography>
+              </MenuItem>
+              <Divider sx={{
+                my: 0.5,
+                borderColor: 'rgba(0,0,0,0.06)',
+              }} />
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon>
+                  <LogOut size={16} />
+                </ListItemIcon>
+                <Typography sx={{ fontSize: '0.8rem' }}>Logout</Typography>
+              </MenuItem>
+            </Menu>
           </Box>
         </Toolbar>
       </AppBar>
@@ -757,8 +1560,8 @@ export default function DashboardLayout({ children, title, menuItems }) {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            p: { xs: 1.5, sm: 2 },
-            pt: { xs: 1.5, sm: 2 },
+            p: { xs: 1.25, sm: 2 },
+            pt: { xs: 1.25, sm: 2 },
             overflow: 'hidden',
           }}
         >
@@ -768,7 +1571,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
               display: 'flex',
               flexDirection: 'column',
               backgroundColor: '#ffffff',
-              borderRadius: 1,
+              borderRadius: '6px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
               border: '1px solid rgba(0,0,0,0.04)',
               overflow: 'hidden',
@@ -778,20 +1581,20 @@ export default function DashboardLayout({ children, title, menuItems }) {
             <Box
               sx={{
                 flex: 1,
-                p: { xs: 1.5, sm: 2 },
+                p: { xs: 1.25, sm: 2 },
                 overflowY: 'auto',
                 overflowX: 'hidden',
                 '&::-webkit-scrollbar': {
-                  width: '6px',
-                  height: '6px',
+                  width: '5px',
+                  height: '5px',
                 },
                 '&::-webkit-scrollbar-track': {
                   background: '#f1f5f9',
-                  borderRadius: '3px',
+                  borderRadius: '2px',
                 },
                 '&::-webkit-scrollbar-thumb': {
                   background: '#cbd5e0',
-                  borderRadius: '3px',
+                  borderRadius: '2px',
                   '&:hover': {
                     background: '#a0aec0',
                   },
@@ -810,12 +1613,20 @@ export default function DashboardLayout({ children, title, menuItems }) {
         <Box sx={{
           borderTop: '1px solid rgba(0,0,0,0.04)',
           backgroundColor: '#ffffff',
-          py: 1.5,
-          px: { xs: 1.5, sm: 2 },
+          py: 1,
+          px: { xs: 1.25, sm: 2 },
         }}>
           <DashboardFooter />
         </Box>
       </Box>
+
+      {/* Profile Dialog */}
+      <ProfileDialog
+        open={profileDialogOpen}
+        onClose={handleProfileDialogClose}
+        user={user}
+        userRole={userRole}
+      />
     </Box>
   );
 }

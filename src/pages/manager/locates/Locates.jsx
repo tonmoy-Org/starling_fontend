@@ -26,18 +26,6 @@ import {
     InputAdornment,
     DialogContentText,
 } from '@mui/material';
-import {
-    Sync as SyncIcon,
-    CheckCircle,
-    AccessTime,
-    Timer,
-    Email,
-    Person,
-    Tag,
-    Close,
-    Delete,
-    Search,
-} from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
 import axiosInstance from '../../../api/axios';
@@ -53,12 +41,36 @@ import StyledTextField from '../../../components/ui/StyledTextField';
 import GradientButton from '../../../components/ui/GradientButton';
 import OutlineButton from '../../../components/ui/OutlineButton';
 
+// Import Lucide React icons
+import {
+    RefreshCw,
+    CheckCircle,
+    Clock,
+    Timer,
+    Mail,
+    User,
+    Tag,
+    X,
+    Trash2,
+    Search,
+    AlertCircle,
+    Phone,
+    Calendar,
+    MapPin,
+    ChevronRight,
+    UserCog,
+    Shield,
+    PhoneCall,
+    AlertTriangle,
+} from 'lucide-react';
+
 // ── Constants ──
 const TEXT_COLOR = '#0F1115';
 const BLUE_COLOR = '#1976d2';
 const GREEN_COLOR = '#10b981';
 const RED_COLOR = '#ef4444';
 const ORANGE_COLOR = '#ed6c02';
+const GRAY_COLOR = '#6b7280';
 
 // ── Utility function ──
 const formatDate = (dateString) => {
@@ -562,8 +574,14 @@ const Locates = () => {
 
     if (isLoading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
-                <CircularProgress />
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress 
+                    sx={{ 
+                        color: BLUE_COLOR,
+                        width: '32px !important',
+                        height: '32px !important',
+                    }} 
+                />
             </Box>
         );
     }
@@ -571,28 +589,42 @@ const Locates = () => {
     return (
         <Box>
             {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography
                         sx={{
-                            fontWeight: 500,
-                            fontSize: 20,
+                            fontWeight: 600,
+                            mb: 0.5,
+                            fontSize: '0.95rem',
                             color: TEXT_COLOR,
+                            letterSpacing: '-0.01em',
                         }}
                     >
                         Locate Management
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography 
+                        variant="body2" 
+                        sx={{ 
+                            color: GRAY_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 400,
+                        }}
+                    >
                         Dispatch and monitor locate requests efficiently
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                         variant="contained"
-                        startIcon={<SyncIcon />}
+                        startIcon={<RefreshCw size={16} />}
                         onClick={() => syncMutation.mutate()}
                         disabled={syncMutation.isPending}
-                        sx={{ textTransform: 'none' }}
+                        sx={{ 
+                            textTransform: 'none',
+                            fontSize: '0.8rem',
+                            height: '36px',
+                            px: 2,
+                        }}
                     >
                         {syncMutation.isPending ? 'Syncing...' : 'Sync Dashboard'}
                     </Button>
@@ -613,10 +645,17 @@ const Locates = () => {
                             placeholder="Search..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            sx={{ 
+                                width: 200,
+                                '& .MuiInputBase-root': {
+                                    fontSize: '0.8rem',
+                                    height: '36px',
+                                },
+                            }}
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
-                                        <Search fontSize="small" />
+                                        <Search size={16} color={GRAY_COLOR} />
                                     </InputAdornment>
                                 ),
                                 endAdornment: searchTerm && (
@@ -625,22 +664,29 @@ const Locates = () => {
                                             size="small"
                                             onClick={() => setSearchTerm('')}
                                             edge="end"
+                                            sx={{ p: 0.5 }}
                                         >
-                                            <Close fontSize="small" />
+                                            <X size={16} />
                                         </IconButton>
                                     </InputAdornment>
                                 ),
                             }}
-                            sx={{ width: 200 }}
                         />
                         {selectedExcavator.size > 0 && (
-                            <GradientButton
+                            <Button
                                 variant="contained"
                                 onClick={openBulkTagDialog}
                                 size="small"
+                                startIcon={<Tag size={14} />}
+                                sx={{ 
+                                    textTransform: 'none',
+                                    fontSize: '0.75rem',
+                                    height: '30px',
+                                    px: 1.5,
+                                }}
                             >
-                                Tag Selected ({selectedExcavator.size})
-                            </GradientButton>
+                                Tag ({selectedExcavator.size})
+                            </Button>
                         )}
                     </Stack>
                 }
@@ -704,33 +750,105 @@ const Locates = () => {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        bgcolor: 'white'
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
                     }
                 }}
             >
                 <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.2)}`,
-                    color: TEXT_COLOR
+                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    pb: 1.5,
                 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Delete color="error" />
-                        <Typography variant="h6" color="error">
-                            Confirm Deletion
-                        </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(RED_COLOR, 0.1),
+                            color: RED_COLOR,
+                        }}>
+                            <Trash2 size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Confirm Deletion
+                            </Typography>
+                            <Typography variant="caption" sx={{ 
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                This action cannot be undone
+                            </Typography>
+                        </Box>
                     </Box>
                 </DialogTitle>
-                <DialogContent sx={{ pt: 3 }}>
-                    <DialogContentText sx={{ color: TEXT_COLOR }}>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography 
+                        variant="body2" 
+                        sx={{ 
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
                         Are you sure you want to delete <strong>{selectedForDeletion.size} item(s)</strong> from the <strong>{deletionSection}</strong> section?
-                    </DialogContentText>
-                    <Alert severity="warning" sx={{ mt: 2, bgcolor: '#fff3cd', color: TEXT_COLOR }}>
-                        This action cannot be undone. All selected work orders will be permanently removed from the system.
-                    </Alert>
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(RED_COLOR, 0.05),
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertTriangle size={18} color={RED_COLOR} />
+                        <Box>
+                            <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                    color: RED_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Warning
+                            </Typography>
+                            <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                All selected work orders will be permanently removed from the system.
+                            </Typography>
+                        </Box>
+                    </Box>
                 </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
                     <Button
                         onClick={() => setDeleteDialogOpen(false)}
-                        sx={{ textTransform: 'none', color: TEXT_COLOR }}
+                        sx={{ 
+                            textTransform: 'none', 
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
                     >
                         Cancel
                     </Button>
@@ -738,11 +856,20 @@ const Locates = () => {
                         onClick={executeBulkDelete}
                         variant="contained"
                         color="error"
-                        startIcon={<Delete />}
+                        startIcon={<Trash2 size={16} />}
                         disabled={deleteBulkMutation.isPending}
-                        sx={{ textTransform: 'none' }}
+                        sx={{ 
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                boxShadow: 'none',
+                            },
+                        }}
                     >
-                        {deleteBulkMutation.isPending ? 'Deleting...' : `Delete ${selectedForDeletion.size} Item(s)`}
+                        {deleteBulkMutation.isPending ? 'Deleting...' : 'Delete Selected'}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -755,27 +882,90 @@ const Locates = () => {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        bgcolor: 'white'
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
                     }
                 }}
             >
-                <DialogTitle sx={{ color: TEXT_COLOR }}>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                        <Typography variant="h6" color={TEXT_COLOR}>Tag as Locates Needed</Typography>
-                    </Stack>
+                <DialogTitle sx={{ 
+                    borderBottom: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            color: BLUE_COLOR,
+                        }}>
+                            <Tag size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Tag as Locates Needed
+                            </Typography>
+                            <Typography variant="caption" sx={{ 
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Add tags to work order
+                            </Typography>
+                        </Box>
+                    </Box>
                 </DialogTitle>
                 <DialogContent>
-                    <Stack spacing={3} sx={{ mt: 2 }}>
+                    <Stack spacing={2.5} sx={{ mt: 2 }}>
                         <Box>
-                            <Typography variant="subtitle2" gutterBottom sx={{ color: TEXT_COLOR }}>
+                            <Typography 
+                                variant="subtitle2" 
+                                sx={{ 
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    mb: 1,
+                                }}
+                            >
                                 Work Order
                             </Typography>
-                            <Typography variant="body1" fontWeight="bold" sx={{ color: TEXT_COLOR }}>
-                                {selectedForTagging[0]?.workOrderNumber || 'N/A'}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
-                                {selectedForTagging[0]?.customerName} • {selectedForTagging[0]?.street}
-                            </Typography>
+                            <Box sx={{
+                                p: 1.5,
+                                borderRadius: '6px',
+                                backgroundColor: alpha(BLUE_COLOR, 0.05),
+                                border: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
+                            }}>
+                                <Typography 
+                                    variant="body1" 
+                                    sx={{ 
+                                        color: TEXT_COLOR,
+                                        fontSize: '0.9rem',
+                                        fontWeight: 600,
+                                        mb: 0.5,
+                                    }}
+                                >
+                                    {selectedForTagging[0]?.workOrderNumber || 'N/A'}
+                                </Typography>
+                                <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                        color: GRAY_COLOR,
+                                        fontSize: '0.75rem',
+                                        fontWeight: 400,
+                                    }}
+                                >
+                                    {selectedForTagging[0]?.customerName} • {selectedForTagging[0]?.street}
+                                </Typography>
+                            </Box>
                         </Box>
 
                         <StyledTextField
@@ -788,6 +978,15 @@ const Locates = () => {
                             helperText="Auto-filled from your account"
                             InputProps={{
                                 readOnly: !!userData.name,
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                }
                             }}
                         />
 
@@ -802,6 +1001,15 @@ const Locates = () => {
                             helperText="Auto-filled from your account"
                             InputProps={{
                                 readOnly: !!userData.email,
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                }
                             }}
                         />
 
@@ -813,18 +1021,39 @@ const Locates = () => {
                             size="small"
                             placeholder="Locates Needed, Additional notes..."
                             helperText="Separate multiple tags with commas"
+                            InputProps={{
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                }
+                            }}
                         />
                     </Stack>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
                     <OutlineButton
                         onClick={() => setTagDialogOpen(false)}
+                        sx={{
+                            fontSize: '0.85rem',
+                            height: '36px',
+                            px: 2,
+                        }}
                     >
                         Cancel
                     </OutlineButton>
                     <GradientButton
                         onClick={handleTagSubmit}
                         disabled={!tagForm.name.trim() || !tagForm.email.trim() || tagLocatesNeededMutation.isPending}
+                        sx={{
+                            fontSize: '0.85rem',
+                            height: '36px',
+                            px: 2,
+                        }}
                     >
                         {tagLocatesNeededMutation.isPending ? 'Tagging...' : 'Tag Work Order'}
                     </GradientButton>
@@ -839,35 +1068,118 @@ const Locates = () => {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        bgcolor: 'white'
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
                     }
                 }}
             >
-                <DialogTitle sx={{ color: TEXT_COLOR }}>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                        <Tag color="primary" />
-                        <Typography variant="h6" color={TEXT_COLOR}>Bulk Tag as Locates Needed</Typography>
-                        <Chip label={`${selectedForTagging.length} items`} size="small" color="primary" />
-                    </Stack>
+                <DialogTitle sx={{ 
+                    borderBottom: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            color: BLUE_COLOR,
+                        }}>
+                            <Tag size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Bulk Tag as Locates Needed
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                <Chip 
+                                    label={`${selectedForTagging.length} items`} 
+                                    size="small" 
+                                    sx={{
+                                        height: '20px',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 500,
+                                        backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                        color: BLUE_COLOR,
+                                    }}
+                                />
+                                <Typography variant="caption" sx={{ 
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.75rem',
+                                    fontWeight: 400,
+                                }}>
+                                    Multiple work orders selected
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
                 </DialogTitle>
                 <DialogContent>
-                    <Stack spacing={3} sx={{ mt: 2 }}>
+                    <Stack spacing={2.5} sx={{ mt: 2 }}>
                         <Box>
-                            <Typography variant="subtitle2" gutterBottom sx={{ color: TEXT_COLOR }}>
+                            <Typography 
+                                variant="subtitle2" 
+                                sx={{ 
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    mb: 1,
+                                }}
+                            >
                                 Selected Work Orders
                             </Typography>
                             <Box sx={{
-                                maxHeight: 150,
+                                maxHeight: 120,
                                 overflow: 'auto',
-                                border: '1px solid #ddd',
-                                p: 1,
-                                borderRadius: 1,
-                                bgcolor: 'white'
+                                border: `1px solid ${alpha(TEXT_COLOR, 0.1)}`,
+                                p: 1.5,
+                                borderRadius: '6px',
+                                bgcolor: alpha(BLUE_COLOR, 0.02),
                             }}>
                                 {selectedForTagging.map((item, index) => (
-                                    <Typography key={index} variant="body2" sx={{ py: 0.5, color: TEXT_COLOR }}>
-                                        • {item.workOrderNumber}: {item.customerName}
-                                    </Typography>
+                                    <Box 
+                                        key={index} 
+                                        sx={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: 1,
+                                            py: 0.75,
+                                            borderBottom: index < selectedForTagging.length - 1 ? `1px solid ${alpha(TEXT_COLOR, 0.05)}` : 'none',
+                                        }}
+                                    >
+                                        <ChevronRight size={14} color={GRAY_COLOR} />
+                                        <Box sx={{ flex: 1 }}>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    color: TEXT_COLOR,
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 500,
+                                                }}
+                                            >
+                                                {item.workOrderNumber}
+                                            </Typography>
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    color: GRAY_COLOR,
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 400,
+                                                }}
+                                            >
+                                                {item.customerName}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
                                 ))}
                             </Box>
                         </Box>
@@ -882,6 +1194,15 @@ const Locates = () => {
                             helperText="Auto-filled from your account"
                             InputProps={{
                                 readOnly: !!userData.name,
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                }
                             }}
                         />
 
@@ -896,6 +1217,15 @@ const Locates = () => {
                             helperText="Auto-filled from your account"
                             InputProps={{
                                 readOnly: !!userData.email,
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                }
                             }}
                         />
 
@@ -907,20 +1237,42 @@ const Locates = () => {
                             size="small"
                             placeholder="Locates Needed, Additional notes..."
                             helperText="Separate multiple tags with commas"
+                            InputProps={{
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                }
+                            }}
                         />
                     </Stack>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
                     <Button
                         onClick={() => setBulkTagDialogOpen(false)}
-                        sx={{ textTransform: 'none', color: TEXT_COLOR }}
+                        sx={{ 
+                            textTransform: 'none', 
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
                     >
                         Cancel
                     </Button>
                     <GradientButton
                         onClick={handleTagSubmit}
                         disabled={!tagForm.name.trim() || !tagForm.email.trim() || bulkTagLocatesNeededMutation.isPending}
-                        startIcon={<Tag />}
+                        startIcon={<Tag size={16} />}
+                        sx={{
+                            fontSize: '0.85rem',
+                            height: '36px',
+                            px: 2,
+                        }}
                     >
                         {bulkTagLocatesNeededMutation.isPending ? 'Tagging...' : `Tag ${selectedForTagging.length} Items`}
                     </GradientButton>
@@ -937,9 +1289,15 @@ const Locates = () => {
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity={snackbar.severity}
+                    iconMapping={{
+                        success: <CheckCircle size={20} />,
+                        error: <AlertCircle size={20} />,
+                        warning: <AlertTriangle size={20} />,
+                        info: <AlertCircle size={20} />,
+                    }}
                     sx={{
                         width: '100%',
-                        borderRadius: 2,
+                        borderRadius: '6px',
                         backgroundColor: snackbar.severity === 'success' 
                             ? alpha(GREEN_COLOR, 0.05) 
                             : alpha(RED_COLOR, 0.05),
@@ -947,10 +1305,21 @@ const Locates = () => {
                         '& .MuiAlert-icon': {
                             color: snackbar.severity === 'success' ? GREEN_COLOR : RED_COLOR,
                         },
+                        '& .MuiAlert-message': {
+                            py: 0.5,
+                        }
                     }}
                     elevation={6}
                 >
-                    <Typography fontWeight={500}>{snackbar.message}</Typography>
+                    <Typography 
+                        sx={{ 
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            color: TEXT_COLOR,
+                        }}
+                    >
+                        {snackbar.message}
+                    </Typography>
                 </Alert>
             </Snackbar>
         </Box>
@@ -971,49 +1340,66 @@ const Section = ({
     <Paper
         elevation={0}
         sx={{
-            mb: 5,
-            borderRadius: 2,
+            mb: 4,
+            borderRadius: '6px',
             overflow: 'hidden',
-            border: `1px solid ${alpha(color, 0.3)}`,
+            border: `1px solid ${alpha(color, 0.15)}`,
             bgcolor: 'white'
         }}
     >
         <Box
             sx={{
-                p: 1.2,
+                p: 1.5,
                 bgcolor: 'white',
-                borderBottom: `3px solid ${color}`,
+                borderBottom: `1px solid ${alpha(color, 0.1)}`,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Typography
-                    sx={{ fontSize: '1rem', color: TEXT_COLOR }}
-                    fontWeight={600}>
+                    sx={{ 
+                        fontSize: '0.9rem', 
+                        color: TEXT_COLOR,
+                        fontWeight: 600,
+                    }}
+                >
                     {title}
                     <Chip
                         size="small"
                         label={count}
                         sx={{
                             ml: 1,
-                            bgcolor: alpha(color, 0.1),
-                            color: TEXT_COLOR
+                            bgcolor: alpha(color, 0.08),
+                            color: TEXT_COLOR,
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            height: '22px',
+                            '& .MuiChip-label': {
+                                px: 1,
+                            },
                         }}
                     />
                 </Typography>
                 {showTimer && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Timer fontSize="small" sx={{ color: TEXT_COLOR, opacity: 0.7 }} />
-                        <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                        <Timer size={16} color={GRAY_COLOR} />
+                        <Typography 
+                            variant="body2" 
+                            sx={{ 
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}
+                        >
                             Real-time countdown active
                         </Typography>
                     </Box>
                 )}
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 {additionalActions}
                 {selectedCount > 0 && (
                     <Button
@@ -1021,7 +1407,13 @@ const Section = ({
                         color="error"
                         size="small"
                         onClick={onDelete}
-                        sx={{ textTransform: 'none' }}
+                        startIcon={<Trash2 size={14} />}
+                        sx={{ 
+                            textTransform: 'none',
+                            fontSize: '0.75rem',
+                            height: '30px',
+                            px: 1.5,
+                        }}
                     >
                         Delete ({selectedCount})
                     </Button>
@@ -1050,17 +1442,123 @@ const LocateTable = ({
     <TableContainer>
         <Table size="small">
             <TableHead>
-                <TableRow sx={{ bgcolor: alpha(color, 0.06) }}>
-                    <TableCell padding="checkbox" width={50} sx={{ color: TEXT_COLOR }}>Select</TableCell>
-                    {showCallAction && <TableCell width={220} sx={{ color: TEXT_COLOR }}>Call Action</TableCell>}
-                    {showTagAction && <TableCell width={100} sx={{ color: TEXT_COLOR }}>Tag</TableCell>}
-                    {showTimerColumn && <TableCell width={180} sx={{ color: TEXT_COLOR }}>Time Remaining</TableCell>}
-                    <TableCell sx={{ color: TEXT_COLOR }}>Customer</TableCell>
-                    <TableCell sx={{ color: TEXT_COLOR }}>Address</TableCell>
-                    <TableCell sx={{ color: TEXT_COLOR }}>Date</TableCell>
-                    <TableCell sx={{ color: TEXT_COLOR }}>Technician</TableCell>
-                    {showCalledBy && <TableCell width={200} sx={{ color: TEXT_COLOR }}>Called By</TableCell>}
-                    {showTaggedBy && <TableCell width={200} sx={{ color: TEXT_COLOR }}>Tagged By</TableCell>}
+                <TableRow sx={{ 
+                    bgcolor: alpha(color, 0.04),
+                    '& th': {
+                        borderBottom: `2px solid ${alpha(color, 0.1)}`,
+                    }
+                }}>
+                    <TableCell 
+                        padding="checkbox" 
+                        width={50} 
+                        sx={{ 
+                            color: TEXT_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            py: 1.5,
+                            pl: 2.5,
+                        }}
+                    >
+                        Select
+                    </TableCell>
+                    {showCallAction && (
+                        <TableCell 
+                            width={220} 
+                            sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                            }}
+                        >
+                            Call Action
+                        </TableCell>
+                    )}
+                    {showTagAction && (
+                        <TableCell 
+                            width={100} 
+                            sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                            }}
+                        >
+                            Tag
+                        </TableCell>
+                    )}
+                    {showTimerColumn && (
+                        <TableCell 
+                            width={180} 
+                            sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                            }}
+                        >
+                            Time Remaining
+                        </TableCell>
+                    )}
+                    <TableCell sx={{ 
+                        color: TEXT_COLOR,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        py: 1.5,
+                    }}>
+                        Customer
+                    </TableCell>
+                    <TableCell sx={{ 
+                        color: TEXT_COLOR,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        py: 1.5,
+                    }}>
+                        Address
+                    </TableCell>
+                    <TableCell sx={{ 
+                        color: TEXT_COLOR,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        py: 1.5,
+                    }}>
+                        Date
+                    </TableCell>
+                    <TableCell sx={{ 
+                        color: TEXT_COLOR,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        py: 1.5,
+                    }}>
+                        Technician
+                    </TableCell>
+                    {showCalledBy && (
+                        <TableCell 
+                            width={200} 
+                            sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                            }}
+                        >
+                            Called By
+                        </TableCell>
+                    )}
+                    {showTaggedBy && (
+                        <TableCell 
+                            width={200} 
+                            sx={{ 
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                                pr: 2.5,
+                            }}
+                        >
+                            Tagged By
+                        </TableCell>
+                    )}
                 </TableRow>
             </TableHead>
             <TableBody>
@@ -1074,8 +1572,26 @@ const LocateTable = ({
                             4 + // Customer, Address, Date, Technician
                             (showCalledBy ? 1 : 0) +
                             (showTaggedBy ? 1 : 0)
-                        } align="center" sx={{ py: 8 }}>
-                            <Typography sx={{ color: TEXT_COLOR, opacity: 0.7 }}>No records found</Typography>
+                        } align="center" sx={{ py: 6 }}>
+                            <Box sx={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                alignItems: 'center',
+                                gap: 1,
+                            }}>
+                                <AlertCircle size={32} color={alpha(TEXT_COLOR, 0.2)} />
+                                <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                        color: TEXT_COLOR, 
+                                        opacity: 0.6,
+                                        fontSize: '0.85rem',
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    No records found
+                                </Typography>
+                            </Box>
                         </TableCell>
                     </TableRow>
                 ) : (
@@ -1091,26 +1607,49 @@ const LocateTable = ({
                                 hover
                                 sx={{
                                     bgcolor: isSelected ? alpha(color, 0.1) : 'white',
+                                    '&:hover': {
+                                        backgroundColor: alpha(color, 0.05),
+                                    },
+                                    '&:last-child td': {
+                                        borderBottom: 'none',
+                                    },
                                 }}
                             >
-                                <TableCell padding="checkbox">
+                                <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
                                     <Checkbox
                                         checked={isSelected}
                                         onChange={() => onToggleSelect(item.id)}
                                         size="small"
-                                        sx={{ color: TEXT_COLOR }}
+                                        sx={{ 
+                                            color: TEXT_COLOR,
+                                            padding: '4px',
+                                        }}
                                     />
                                 </TableCell>
 
                                 {showCallAction && (
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         {item.locatesCalled ? (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <CheckCircle sx={{ color: RED_COLOR, fontSize: 18 }} />
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                <CheckCircle size={18} color={RED_COLOR} />
                                                 <Chip
                                                     label={item.callType || 'Called'}
                                                     size="small"
-                                                    color={item.callType === 'EMERGENCY' ? 'error' : 'primary'}
+                                                    sx={{
+                                                        backgroundColor: item.callType === 'EMERGENCY' 
+                                                            ? alpha(RED_COLOR, 0.1) 
+                                                            : alpha(BLUE_COLOR, 0.1),
+                                                        color: item.callType === 'EMERGENCY' ? RED_COLOR : BLUE_COLOR,
+                                                        border: `1px solid ${item.callType === 'EMERGENCY' 
+                                                            ? alpha(RED_COLOR, 0.2) 
+                                                            : alpha(BLUE_COLOR, 0.2)}`,
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 500,
+                                                        height: '22px',
+                                                        '& .MuiChip-label': {
+                                                            px: 1,
+                                                        },
+                                                    }}
                                                 />
                                             </Box>
                                         ) : (
@@ -1119,7 +1658,13 @@ const LocateTable = ({
                                                     size="small"
                                                     variant="outlined"
                                                     onClick={() => onMarkCalled(item.id, 'STANDARD')}
-                                                    sx={{ textTransform: 'none' }}
+                                                    startIcon={<PhoneCall size={14} />}
+                                                    sx={{ 
+                                                        textTransform: 'none',
+                                                        fontSize: '0.75rem',
+                                                        height: '30px',
+                                                        px: 1.5,
+                                                    }}
                                                 >
                                                     Standard
                                                 </Button>
@@ -1128,7 +1673,13 @@ const LocateTable = ({
                                                     variant="outlined"
                                                     color="error"
                                                     onClick={() => onMarkCalled(item.id, 'EMERGENCY')}
-                                                    sx={{ textTransform: 'none' }}
+                                                    startIcon={<AlertTriangle size={14} />}
+                                                    sx={{ 
+                                                        textTransform: 'none',
+                                                        fontSize: '0.75rem',
+                                                        height: '30px',
+                                                        px: 1.5,
+                                                    }}
                                                 >
                                                     Emergency
                                                 </Button>
@@ -1138,43 +1689,55 @@ const LocateTable = ({
                                 )}
 
                                 {showTagAction && (
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         {!item.manuallyTagged ? (
                                             <Tooltip title="Tag as Locates Needed">
                                                 <IconButton
                                                     size="small"
                                                     onClick={() => onTag(item)}
                                                     sx={{
-                                                        color: '#0F1115',
-                                                        '&:hover': { bgcolor: alpha('#0F1115', 0.1) }
+                                                        color: TEXT_COLOR,
+                                                        padding: '4px',
+                                                        '&:hover': { 
+                                                            backgroundColor: alpha(color, 0.1),
+                                                            color: color,
+                                                        }
                                                     }}
                                                 >
-                                                    <Tag fontSize="small" />
+                                                    <Tag size={16} />
                                                 </IconButton>
                                             </Tooltip>
                                         ) : (
                                             <Tooltip title={item.tags}>
-                                                {item.tags && (
-                                                    <Typography sx={{ fontSize: '0.8rem', color: '#0F1115' }}>
-                                                        {item.tags}
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                    <Tag size={14} color={GREEN_COLOR} />
+                                                    <Typography 
+                                                        sx={{ 
+                                                            fontSize: '0.8rem', 
+                                                            color: TEXT_COLOR,
+                                                            fontWeight: 400,
+                                                        }}
+                                                    >
+                                                        {item.tags.split(',')[0]}
                                                     </Typography>
-                                                )}
+                                                </Box>
                                             </Tooltip>
                                         )}
                                     </TableCell>
                                 )}
 
                                 {showTimerColumn && (
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         {item.timeRemainingText ? (
                                             <Tooltip title={item.timeRemainingDetail}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <AccessTime fontSize="small" sx={{ color: item.timeRemainingColor }} />
+                                                    <Clock size={16} color={item.timeRemainingColor} />
                                                     <Typography
                                                         variant="body2"
                                                         sx={{
                                                             color: item.timeRemainingColor,
-                                                            fontWeight: item.timeRemainingText === 'EXPIRED' ? 'bold' : 'normal',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: item.timeRemainingText === 'EXPIRED' ? 600 : 400,
                                                             fontFamily: item.callType === 'EMERGENCY' ? 'monospace' : 'inherit'
                                                         }}
                                                     >
@@ -1183,25 +1746,49 @@ const LocateTable = ({
                                                 </Box>
                                             </Tooltip>
                                         ) : (
-                                            <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    color: GRAY_COLOR, 
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 400,
+                                                }}
+                                            >
                                                 —
                                             </Typography>
                                         )}
                                     </TableCell>
                                 )}
 
-                                <TableCell>
+                                <TableCell sx={{ py: 1.5 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                                         {hasCheckmark && (
                                             <Tooltip title={`Called by ${item.calledByName}`}>
-                                                <CheckCircle sx={{ color: RED_COLOR, fontSize: 16, mt: 0.5 }} />
+                                                <CheckCircle size={16} color={RED_COLOR} />
                                             </Tooltip>
                                         )}
                                         <Box>
-                                            <Typography variant="body2" fontWeight={500} sx={{ color: TEXT_COLOR }}>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    color: TEXT_COLOR,
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 500,
+                                                    mb: 0.25,
+                                                }}
+                                            >
                                                 {item.customerName}
                                             </Typography>
-                                            <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }} display="block">
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    color: GRAY_COLOR, 
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 400,
+                                                    display: 'block',
+                                                    mb: 0.5,
+                                                }}
+                                            >
                                                 WO: {item.workOrderNumber}
                                             </Typography>
                                             {item.priorityName && item.priorityName !== 'Standard' && (
@@ -1209,75 +1796,153 @@ const LocateTable = ({
                                                     label={item.priorityName}
                                                     size="small"
                                                     sx={{
-                                                        mt: 0.5,
-                                                        color: '#0F1115',
-                                                        fontSize: '0.65rem',
-                                                        height: 20
+                                                        color: TEXT_COLOR,
+                                                        fontSize: '0.7rem',
+                                                        height: '20px',
+                                                        fontWeight: 500,
+                                                        backgroundColor: alpha(color, 0.1),
+                                                        border: `1px solid ${alpha(color, 0.2)}`,
+                                                        '& .MuiChip-label': {
+                                                            px: 1,
+                                                        },
                                                     }}
                                                 />
                                             )}
-
                                         </Box>
                                     </Box>
                                 </TableCell>
 
-                                <TableCell>
-                                    <Typography variant="body2" sx={{ color: TEXT_COLOR }}>{addressLine}</Typography>
+                                <TableCell sx={{ py: 1.5 }}>
+                                    <Typography 
+                                        variant="body2" 
+                                        sx={{ 
+                                            color: TEXT_COLOR,
+                                            fontSize: '0.85rem',
+                                            fontWeight: 400,
+                                            mb: 0.25,
+                                        }}
+                                    >
+                                        {addressLine}
+                                    </Typography>
                                     {location && (
-                                        <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                        <Typography 
+                                            variant="caption" 
+                                            sx={{ 
+                                                color: GRAY_COLOR,
+                                                fontSize: '0.75rem',
+                                                fontWeight: 400,
+                                            }}
+                                        >
                                             {location}
                                         </Typography>
                                     )}
                                 </TableCell>
 
-                                <TableCell>
+                                <TableCell sx={{ py: 1.5 }}>
                                     <Stack spacing={0.5}>
-                                        <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                        <Typography 
+                                            variant="caption" 
+                                            sx={{ 
+                                                color: GRAY_COLOR,
+                                                fontSize: '0.75rem',
+                                                fontWeight: 400,
+                                            }}
+                                        >
                                             Requested: {formatDate(item.requestedDate)}
                                         </Typography>
                                         {item.calledAt && (
-                                            <Typography variant="caption" sx={{ color: BLUE_COLOR }}>
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    color: BLUE_COLOR,
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 500,
+                                                }}
+                                            >
                                                 Called: {formatDate(item.calledAt)}
                                             </Typography>
                                         )}
                                         {item.completionDate && (
-                                            <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    color: GRAY_COLOR,
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 400,
+                                                }}
+                                            >
                                                 Due: {formatDate(item.completionDate)}
                                             </Typography>
                                         )}
                                     </Stack>
                                 </TableCell>
 
-                                <TableCell>
+                                <TableCell sx={{ py: 1.5 }}>
                                     <Stack direction="row" spacing={1} alignItems="center">
-                                        <Avatar sx={{ width: 28, height: 28, bgcolor: color, fontSize: '0.85rem' }}>
+                                        <Avatar sx={{ 
+                                            width: 28, 
+                                            height: 28, 
+                                            bgcolor: color, 
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                        }}>
                                             {item.techName?.charAt(0) || '?'}
                                         </Avatar>
-                                        <Typography variant="body2" sx={{ color: TEXT_COLOR }}>{item.techName}</Typography>
+                                        <Typography 
+                                            variant="body2" 
+                                            sx={{ 
+                                                color: TEXT_COLOR,
+                                                fontSize: '0.85rem',
+                                                fontWeight: 400,
+                                            }}
+                                        >
+                                            {item.techName}
+                                        </Typography>
                                     </Stack>
                                 </TableCell>
 
                                 {showCalledBy && (
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         {item.calledByName ? (
                                             <Box>
-                                                <Box sx={{ display: 'flex', alignItems: 'start', gap: 0.5 }}>
-                                                    <Person fontSize="small" sx={{ color: TEXT_COLOR, opacity: 0.7 }} />
-                                                    <Typography variant="body2" fontWeight={500} sx={{ color: TEXT_COLOR }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <User size={14} color={TEXT_COLOR} />
+                                                    <Typography 
+                                                        variant="body2" 
+                                                        sx={{ 
+                                                            color: TEXT_COLOR,
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: 500,
+                                                        }}
+                                                    >
                                                         {item.calledByName}
                                                     </Typography>
                                                 </Box>
                                                 {item.calledByEmail && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                                        <Email fontSize="small" sx={{ color: TEXT_COLOR, opacity: 0.7, fontSize: '0.8rem' }} />
-                                                        <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                        <Mail size={12} color={GRAY_COLOR} />
+                                                        <Typography 
+                                                            variant="caption" 
+                                                            sx={{ 
+                                                                color: GRAY_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 400,
+                                                            }}
+                                                        >
                                                             {item.calledByEmail}
                                                         </Typography>
                                                     </Box>
                                                 )}
                                             </Box>
                                         ) : (
-                                            <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    color: GRAY_COLOR,
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 400,
+                                                }}
+                                            >
                                                 —
                                             </Typography>
                                         )}
@@ -1285,26 +1950,47 @@ const LocateTable = ({
                                 )}
 
                                 {showTaggedBy && (
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5, pr: 2.5 }}>
                                         {item.taggedByName ? (
                                             <Box>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <Person fontSize="small" sx={{ color: '#0F1115' }} />
-                                                    <Typography variant="body2" fontWeight={500}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <User size={14} color={TEXT_COLOR} />
+                                                    <Typography 
+                                                        variant="body2" 
+                                                        sx={{ 
+                                                            color: TEXT_COLOR,
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: 500,
+                                                        }}
+                                                    >
                                                         {item.taggedByName}
                                                     </Typography>
                                                 </Box>
                                                 {item.taggedByEmail && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                                        <Email fontSize="small" sx={{ color: "#0F1115", fontSize: '0.8rem' }} />
-                                                        <Typography variant="caption">
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                        <Mail size={12} color={GRAY_COLOR} />
+                                                        <Typography 
+                                                            variant="caption" 
+                                                            sx={{ 
+                                                                color: GRAY_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 400,
+                                                            }}
+                                                        >
                                                             {item.taggedByEmail}
                                                         </Typography>
                                                     </Box>
                                                 )}
                                             </Box>
                                         ) : (
-                                            <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    color: GRAY_COLOR,
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 400,
+                                                }}
+                                            >
                                                 —
                                             </Typography>
                                         )}

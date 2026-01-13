@@ -18,15 +18,9 @@ import {
     useTheme,
     useMediaQuery,
     alpha,
+    IconButton,
+    Button,
 } from '@mui/material';
-import {
-    Edit as EditIcon,
-    Save as SaveIcon,
-    Cancel as CancelIcon,
-    Security as SecurityIcon,
-    Email as EmailIcon,
-    Person as PersonIcon,
-} from '@mui/icons-material';
 import axiosInstance from '../api/axios';
 import { useAuth } from '../auth/AuthProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -34,6 +28,27 @@ import StyledTextField from './ui/StyledTextField';
 import GradientButton from './ui/GradientButton';
 import OutlineButton from './ui/OutlineButton';
 import DeviceList from './DeviceList';
+
+// Import Lucide React icons
+import {
+    Edit,
+    Save,
+    X,
+    Shield,
+    Mail,
+    User,
+    Lock,
+    Camera,
+    Smartphone,
+    Calendar,
+    CheckCircle,
+    AlertCircle,
+    Eye,
+    EyeOff,
+    ChevronRight,
+    Key,
+    RefreshCw,
+} from 'lucide-react';
 
 // Define color constants
 const TEXT_COLOR = '#0F1115';
@@ -43,6 +58,7 @@ const BLUE_DARK = '#1565c0';
 const RED_COLOR = '#ef4444';
 const RED_DARK = '#dc2626';
 const GREEN_COLOR = '#10b981';
+const GRAY_COLOR = '#6b7280';
 
 export const ProfilePage = ({ roleLabel }) => {
     const { user, updateUser } = useAuth();
@@ -53,6 +69,9 @@ export const ProfilePage = ({ roleLabel }) => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [passwordData, setPasswordData] = useState({
         currentPassword: '',
         newPassword: '',
@@ -251,6 +270,9 @@ export const ProfilePage = ({ roleLabel }) => {
             confirmPassword: '',
         });
         setPasswordError('');
+        setShowCurrentPassword(false);
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
     };
 
     const handleCloseSnackbar = () => {
@@ -260,26 +282,51 @@ export const ProfilePage = ({ roleLabel }) => {
 
     if (isLoading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress sx={{ color: BLUE_COLOR }} />
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+                <CircularProgress
+                    sx={{
+                        color: BLUE_COLOR,
+                        width: '32px !important',
+                        height: '32px !important',
+                    }}
+                />
             </Box>
         );
     }
 
     if (isError) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <Alert severity="error" sx={{ 
-                    width: '100%', 
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+                <Alert severity="error" sx={{
+                    width: '100%',
                     maxWidth: 500,
-                    borderRadius: 2,
+                    borderRadius: '6px',
                     backgroundColor: alpha(RED_COLOR, 0.05),
                     borderLeft: `4px solid ${RED_COLOR}`,
+                    '& .MuiAlert-icon': {
+                        color: RED_COLOR,
+                    },
                 }}>
-                    <Typography variant="h6" sx={{ color: TEXT_COLOR }} gutterBottom>
+                    <Typography
+                        variant="body1"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.9rem',
+                            fontWeight: 600,
+                            mb: 0.5,
+                        }}
+                        gutterBottom
+                    >
                         Failed to load profile
                     </Typography>
-                    <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: GRAY_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 400,
+                        }}
+                    >
                         {fetchError?.message || 'Please try again later.'}
                     </Typography>
                 </Alert>
@@ -289,18 +336,37 @@ export const ProfilePage = ({ roleLabel }) => {
 
     if (!profile && !isLoading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <Alert severity="warning" sx={{ 
-                    width: '100%', 
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+                <Alert severity="warning" sx={{
+                    width: '100%',
                     maxWidth: 500,
-                    borderRadius: 2,
+                    borderRadius: '6px',
                     backgroundColor: alpha('#f59e0b', 0.05),
                     borderLeft: `4px solid #f59e0b`,
+                    '& .MuiAlert-icon': {
+                        color: '#f59e0b',
+                    },
                 }}>
-                    <Typography variant="h6" sx={{ color: TEXT_COLOR }} gutterBottom>
+                    <Typography
+                        variant="body1"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.9rem',
+                            fontWeight: 600,
+                            mb: 0.5,
+                        }}
+                        gutterBottom
+                    >
                         Profile not found
                     </Typography>
-                    <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: GRAY_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 400,
+                        }}
+                    >
                         Unable to load profile data. Please refresh the page.
                     </Typography>
                 </Alert>
@@ -320,7 +386,7 @@ export const ProfilePage = ({ roleLabel }) => {
                         left: 0,
                         right: 0,
                         zIndex: 9999,
-                        height: 3,
+                        height: 2,
                         backgroundColor: alpha(BLUE_COLOR, 0.1),
                         '& .MuiLinearProgress-bar': {
                             backgroundColor: BLUE_COLOR,
@@ -329,45 +395,66 @@ export const ProfilePage = ({ roleLabel }) => {
                 />
             )}
 
-            <Box sx={{ display: { xs: '', lg: 'flex' } }} justifyContent="space-between" alignItems="center" mb={1}>
-                <Box mb={isMobile ? 2 : 0}>
-                    <Typography sx={{ 
-                        fontWeight: 'bold', 
-                        mb: 0.5, 
-                        fontSize: 20,
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+                <Box>
+                    <Typography sx={{
+                        fontWeight: 600,
+                        mb: 0.5,
+                        fontSize: '0.95rem',
                         color: TEXT_COLOR,
+                        letterSpacing: '-0.01em',
                     }}>
                         My Profile
                     </Typography>
-                    <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                    <Typography variant="body2" sx={{
+                        color: GRAY_COLOR,
+                        fontSize: '0.8rem',
+                        fontWeight: 400,
+                    }}>
                         Manage your account settings and preferences
                     </Typography>
                 </Box>
                 {!isEditing ? (
                     <GradientButton
                         variant="contained"
-                        startIcon={<EditIcon />}
+                        startIcon={<Edit size={16} />}
                         onClick={() => setIsEditing(true)}
                         disabled={updating}
-                        size={isMobile ? "small" : "large"}
+                        size="small"
+                        sx={{
+                            fontSize: '0.85rem',
+                            height: '36px',
+                            px: 2,
+                        }}
                     >
                         Edit Profile
                     </GradientButton>
                 ) : (
-                    <Box display="flex" gap={2}>
+                    <Box display="flex" gap={1.5}>
                         <OutlineButton
-                            startIcon={<CancelIcon />}
+                            startIcon={<X size={16} />}
                             onClick={handleCancel}
                             disabled={updating}
-                            size='small'
+                            size="small"
+                            sx={{
+                                fontSize: '0.85rem',
+                                height: '36px',
+                                px: 2,
+                            }}
                         >
                             Cancel
                         </OutlineButton>
                         <GradientButton
                             variant="contained"
-                            startIcon={<SaveIcon />}
+                            startIcon={<Save size={16} />}
                             onClick={handleSave}
                             disabled={updating}
+                            size="small"
+                            sx={{
+                                fontSize: '0.85rem',
+                                height: '36px',
+                                px: 2,
+                            }}
                         >
                             {updating ? 'Saving...' : 'Save Changes'}
                         </GradientButton>
@@ -383,38 +470,64 @@ export const ProfilePage = ({ roleLabel }) => {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                        backgroundColor: alpha('#ffffff', 0.7),
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
                         zIndex: 1000,
+                        borderRadius: '6px',
                     }}
                 >
-                    <CircularProgress sx={{ color: BLUE_COLOR }} />
+                    <CircularProgress
+                        sx={{
+                            color: BLUE_COLOR,
+                            width: '32px !important',
+                            height: '32px !important',
+                        }}
+                    />
                 </Box>
             )}
 
-            <Grid container spacing={3}>
-                {/* KEPT ORIGINAL SYNTAX: size={{ xs: 12, md: 8 }} */}
+            <Grid container spacing={2.5}>
+                {/* Left Column - Personal Information */}
                 <Grid size={{ xs: 12, md: 8 }}>
                     <Paper
                         elevation={0}
                         sx={{
-                            p: 2,
+                            p: 2.5,
                             height: '100%',
-                            borderRadius: 2,
-                            border: `1px solid ${alpha(TEXT_COLOR, 0.1)}`,
+                            borderRadius: '6px',
+                            border: `1px solid ${alpha(TEXT_COLOR, 0.08)}`,
                             bgcolor: 'white'
                         }}
                     >
-                        <Box display="flex" alignItems="center" mb={3}>
-                            <Typography fontWeight="bold" sx={{ color: TEXT_COLOR , fontSize: '1.2rem' }}>
+                        <Box display="flex" alignItems="center" mb={2.5}>
+                            <Box sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                color: BLUE_COLOR,
+                                mr: 1.5,
+                            }}>
+                                <User size={18} />
+                            </Box>
+                            <Typography
+                                fontWeight="600"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.9rem',
+                                }}
+                            >
                                 Personal Information
                             </Typography>
                         </Box>
 
                         <Grid container spacing={2}>
-                            {/* KEPT ORIGINAL SYNTAX: size={{ xs: 12, md: 6 }} */}
+                            {/* Name Field */}
                             <Grid size={{ xs: 12, md: 6 }}>
                                 <StyledTextField
                                     fullWidth
@@ -426,15 +539,32 @@ export const ProfilePage = ({ roleLabel }) => {
                                     error={!formData.name?.trim() && isEditing}
                                     helperText={!formData.name?.trim() && isEditing ? "Name is required" : ""}
                                     InputProps={{
-                                        startAdornment: <PersonIcon sx={{ mr: 1, color: '#0F1115' }} />,
+                                        startAdornment: (
+                                            <Box sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                mr: 1.5,
+                                                color: GRAY_COLOR
+                                            }}>
+                                                <User size={16} />
+                                            </Box>
+                                        ),
+                                        sx: { fontSize: '0.85rem' }
                                     }}
-                                    variant="outlined"
+                                    sx={{
+                                        '& .MuiFormLabel-root': {
+                                            fontSize: '0.85rem',
+                                        },
+                                        '& .MuiFormHelperText-root': {
+                                            fontSize: '0.75rem',
+                                        },
+                                        mb: 1.5,
+                                    }}
                                     size="small"
-                                    sx={{ mb: 2 }}
                                 />
                             </Grid>
 
-                            {/* KEPT ORIGINAL SYNTAX: size={{ xs: 12, md: 6 }} */}
+                            {/* Email Field */}
                             <Grid size={{ xs: 12, md: 6 }}>
                                 <StyledTextField
                                     fullWidth
@@ -447,91 +577,213 @@ export const ProfilePage = ({ roleLabel }) => {
                                     error={(!/\S+@\S+\.\S+/.test(formData.email)) && isEditing && formData.email}
                                     helperText={(!/\S+@\S+\.\S+/.test(formData.email)) && isEditing && formData.email ? "Enter valid email" : ""}
                                     InputProps={{
-                                        startAdornment: <EmailIcon sx={{ mr: 1, color: '#0F1115' }} />,
+                                        startAdornment: (
+                                            <Box sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                mr: 1.5,
+                                                color: GRAY_COLOR
+                                            }}>
+                                                <Mail size={16} />
+                                            </Box>
+                                        ),
+                                        sx: { fontSize: '0.85rem' }
                                     }}
-                                    variant="outlined"
+                                    sx={{
+                                        '& .MuiFormLabel-root': {
+                                            fontSize: '0.85rem',
+                                        },
+                                        '& .MuiFormHelperText-root': {
+                                            fontSize: '0.75rem',
+                                        },
+                                        mb: 1.5,
+                                    }}
                                     size="small"
-                                    sx={{ mb: 2 }}
                                 />
                             </Grid>
                         </Grid>
 
-                        <Divider sx={{ 
+                        <Divider sx={{
                             my: 3,
-                            backgroundColor: alpha(TEXT_COLOR, 0.1),
+                            backgroundColor: alpha(TEXT_COLOR, 0.06),
                         }} />
 
-                        <DeviceList devices={profile?.devices || []} />
+                        {/* Device List */}
+                        <Box mb={3}>
+                            <Box display="flex" alignItems="center" mb={2}>
+                                <Box sx={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: '6px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                    color: BLUE_COLOR,
+                                    mr: 1.5,
+                                }}>
+                                    <Smartphone size={18} />
+                                </Box>
+                                <Typography
+                                    fontWeight="600"
+                                    sx={{
+                                        color: TEXT_COLOR,
+                                        fontSize: '0.9rem',
+                                    }}
+                                >
+                                    Active Devices
+                                </Typography>
+                            </Box>
+                            <DeviceList devices={profile?.devices || []} />
+                        </Box>
 
                         {profile?.createdAt && (
-                            <Box mt={3}>
-                                <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
-                                    Account created: {new Date(profile.createdAt).toLocaleDateString()}
+                            <Box sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                mt: 2,
+                                pt: 2,
+                                borderTop: `1px solid ${alpha(TEXT_COLOR, 0.06)}`,
+                            }}>
+                                <Calendar size={14} color={GRAY_COLOR} />
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        color: GRAY_COLOR,
+                                        fontSize: '0.75rem',
+                                        fontWeight: 400,
+                                    }}
+                                >
+                                    Account created: {new Date(profile.createdAt).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric'
+                                    })}
                                 </Typography>
                             </Box>
                         )}
                     </Paper>
                 </Grid>
 
-                {/* KEPT ORIGINAL SYNTAX: size={{ xs: 12, md: 4 }} */}
+                {/* Right Column - Profile Summary */}
                 <Grid size={{ xs: 12, md: 4 }}>
                     <Paper
                         elevation={0}
                         sx={{
-                            p: 2,
+                            p: 2.5,
                             height: '100%',
-                            borderRadius: 2,
-                            border: `1px solid ${alpha(TEXT_COLOR, 0.1)}`,
+                            borderRadius: '6px',
+                            border: `1px solid ${alpha(TEXT_COLOR, 0.08)}`,
                             bgcolor: 'white'
                         }}
                     >
                         <Box display="flex" flexDirection="column" alignItems="center">
-                            <Avatar
+                            {/* Profile Avatar */}
+                            <Box sx={{ position: 'relative', mb: 2.5 }}>
+                                <Avatar
+                                    sx={{
+                                        width: 100,
+                                        height: 100,
+                                        fontSize: '2rem',
+                                        fontWeight: 600,
+                                        bgcolor: BLUE_COLOR,
+                                        color: '#ffffff',
+                                        border: '4px solid #ffffff',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                    }}
+                                >
+                                    {(formData.name?.charAt(0) || profile?.name?.charAt(0) || user?.name?.charAt(0) || 'U')?.toUpperCase()}
+                                </Avatar>
+                                {isEditing && (
+                                    <IconButton
+                                        sx={{
+                                            position: 'absolute',
+                                            bottom: 0,
+                                            right: 0,
+                                            backgroundColor: BLUE_COLOR,
+                                            color: '#ffffff',
+                                            width: 28,
+                                            height: 28,
+                                            border: '2px solid #ffffff',
+                                            '&:hover': {
+                                                backgroundColor: BLUE_DARK,
+                                            },
+                                        }}
+                                        size="small"
+                                    >
+                                        <Camera size={14} />
+                                    </IconButton>
+                                )}
+                            </Box>
+
+                            {/* User Name */}
+                            <Typography
+                                variant="h6"
+                                fontWeight="600"
+                                align="center"
+                                gutterBottom
                                 sx={{
-                                    width: 120,
-                                    height: 120,
-                                    fontSize: 48,
-                                    fontWeight: 'bold',
-                                    mb: 3,
+                                    color: TEXT_COLOR,
+                                    fontSize: '1rem',
+                                    mb: 0.5,
                                 }}
                             >
-                                {(formData.name?.charAt(0) || profile?.name?.charAt(0) || user?.name?.charAt(0) || 'U')?.toUpperCase()}
-                            </Avatar>
-
-                            <Typography variant="h5" fontWeight="bold" align="center" gutterBottom sx={{ color: TEXT_COLOR }}>
                                 {formData.name || profile?.name || user?.name || 'User'}
                             </Typography>
-                            <Typography variant="body2" align="center" mb={3} sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                            <Typography
+                                variant="body2"
+                                align="center"
+                                mb={2.5}
+                                sx={{
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 400,
+                                }}
+                            >
                                 {formData.email || profile?.email || user?.email || ''}
                             </Typography>
 
+                            {/* Role Badge */}
                             <Chip
+                                icon={<Shield size={14} />}
                                 label={roleLabel || (profile?.role || user?.role || 'USER').replace('_', ' ').toUpperCase()}
                                 size="small"
                                 sx={{
-                                    mb: 4,
-                                    fontWeight: 'bold',
-                                    px: 2,
+                                    mb: 3,
+                                    fontWeight: 600,
+                                    px: 1.5,
                                     py: 1,
-                                    color: '#0F1115',
+                                    height: '28px',
+                                    backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                    color: BLUE_COLOR,
+                                    border: `1px solid ${alpha(BLUE_COLOR, 0.3)}`,
+                                    fontSize: '0.75rem',
                                     '& .MuiChip-icon': {
-                                        color: '#FFFFFF',
+                                        color: BLUE_COLOR,
+                                        marginLeft: '6px',
                                     },
                                 }}
                             />
                         </Box>
 
-                        <Divider sx={{ 
-                            my: 4,
-                            backgroundColor: alpha(TEXT_COLOR, 0.1),
+                        <Divider sx={{
+                            my: 3,
+                            backgroundColor: alpha(TEXT_COLOR, 0.06),
                         }} />
 
-                        <Box display="flex" flexDirection="column" gap={2}>
+                        {/* Security Actions */}
+                        <Box display="flex" flexDirection="column" gap={1.5}>
                             <OutlineButton
                                 fullWidth
                                 onClick={() => setOpenPasswordDialog(true)}
                                 disabled={updating || changePasswordMutation.isPending}
-                                size="large"
+                                startIcon={<Key size={16} />}
+                                sx={{
+                                    fontSize: '0.85rem',
+                                    height: '38px',
+                                    pl: 2,
+                                }}
                             >
                                 Change Password
                             </OutlineButton>
@@ -540,6 +792,7 @@ export const ProfilePage = ({ roleLabel }) => {
                 </Grid>
             </Grid>
 
+            {/* Password Change Dialog */}
             <Dialog
                 open={openPasswordDialog}
                 onClose={handleClosePasswordDialog}
@@ -547,92 +800,255 @@ export const ProfilePage = ({ roleLabel }) => {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        borderRadius: 3,
-                        bgcolor: 'white'
+                        borderRadius: '8px',
+                        bgcolor: 'white',
+                        border: `1px solid ${alpha(TEXT_COLOR, 0.08)}`,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
                     }
                 }}
             >
-                <DialogTitle sx={{ 
-                    color: '#0F1115',
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(TEXT_COLOR, 0.06)}`,
+                    pb: 1.5,
                 }}>
-                    <Box display="flex" alignItems="center" sx={{fontSize: '1.2rem'}} gap={1}>
-                        Change Password
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            color: BLUE_COLOR,
+                        }}>
+                            <Lock size={18} />
+                        </Box>
+                        <Box>
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.95rem',
+                                    fontWeight: 600,
+                                    lineHeight: 1.2,
+                                }}
+                            >
+                                Change Password
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.75rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Update your account password
+                            </Typography>
+                        </Box>
                     </Box>
                 </DialogTitle>
-                <DialogContent>
-                    <Box sx={{ pt: 2 }}>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Box sx={{ pt: 1 }}>
                         {passwordError && (
-                            <Alert severity="error" sx={{ 
-                                borderRadius: 2,
-                                backgroundColor: alpha(RED_COLOR, 0.05),
-                                borderLeft: `4px solid ${RED_COLOR}`,
-                            }}>
-                                <Typography sx={{ color: TEXT_COLOR }}>{passwordError}</Typography>
+                            <Alert
+                                severity="error"
+                                icon={<AlertCircle size={18} />}
+                                sx={{
+                                    borderRadius: '6px',
+                                    backgroundColor: alpha(RED_COLOR, 0.05),
+                                    borderLeft: `4px solid ${RED_COLOR}`,
+                                    '& .MuiAlert-icon': {
+                                        color: RED_COLOR,
+                                    },
+                                    mb: 2.5,
+                                }}
+                            >
+                                <Typography
+                                    sx={{
+                                        color: TEXT_COLOR,
+                                        fontSize: '0.85rem',
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    {passwordError}
+                                </Typography>
                             </Alert>
                         )}
 
+                        {/* Current Password */}
                         <StyledTextField
                             fullWidth
                             label="Current Password"
                             name="currentPassword"
-                            type="password"
+                            type={showCurrentPassword ? "text" : "password"}
                             value={passwordData.currentPassword}
                             onChange={handlePasswordChange}
                             margin="normal"
                             required
-                            size='small'
+                            size="small"
                             disabled={changePasswordMutation.isPending}
-                            variant="outlined"
+                            InputProps={{
+                                startAdornment: (
+                                    <Box sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        mr: 1.5,
+                                        color: GRAY_COLOR
+                                    }}>
+                                        <Lock size={16} />
+                                    </Box>
+                                ),
+                                endAdornment: (
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                        sx={{ color: GRAY_COLOR }}
+                                    >
+                                        {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </IconButton>
+                                ),
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                },
+                                mb: 2,
+                            }}
                         />
 
+                        {/* New Password */}
                         <StyledTextField
                             fullWidth
                             label="New Password"
                             name="newPassword"
-                            type="password"
-                            size='small'
+                            type={showNewPassword ? "text" : "password"}
                             value={passwordData.newPassword}
                             onChange={handlePasswordChange}
                             margin="normal"
                             required
+                            size="small"
                             helperText="Password must be at least 6 characters"
                             disabled={changePasswordMutation.isPending}
-                            variant="outlined"
+                            InputProps={{
+                                startAdornment: (
+                                    <Box sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        mr: 1.5,
+                                        color: GRAY_COLOR
+                                    }}>
+                                        <Key size={16} />
+                                    </Box>
+                                ),
+                                endAdornment: (
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                        sx={{ color: GRAY_COLOR }}
+                                    >
+                                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </IconButton>
+                                ),
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                },
+                                mb: 2,
+                            }}
                         />
 
+                        {/* Confirm Password */}
                         <StyledTextField
                             fullWidth
                             label="Confirm New Password"
                             name="confirmPassword"
-                            type="password"
-                            size='small'
+                            type={showConfirmPassword ? "text" : "password"}
                             value={passwordData.confirmPassword}
                             onChange={handlePasswordChange}
                             margin="normal"
                             required
+                            size="small"
                             disabled={changePasswordMutation.isPending}
-                            variant="outlined"
+                            InputProps={{
+                                startAdornment: (
+                                    <Box sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        mr: 1.5,
+                                        color: GRAY_COLOR
+                                    }}>
+                                        <CheckCircle size={16} />
+                                    </Box>
+                                ),
+                                endAdornment: (
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        sx={{ color: GRAY_COLOR }}
+                                    >
+                                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </IconButton>
+                                ),
+                                sx: { fontSize: '0.85rem' }
+                            }}
+                            sx={{
+                                '& .MuiFormLabel-root': {
+                                    fontSize: '0.85rem',
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    fontSize: '0.75rem',
+                                },
+                            }}
                         />
                     </Box>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 3 }}>
-                    <OutlineButton
+                <DialogActions sx={{
+                    p: 2.5,
+                    pt: 2,
+                    borderTop: `1px solid ${alpha(TEXT_COLOR, 0.06)}`,
+                    justifyContent: 'space-between',
+                }}>
+                    <Button
                         onClick={handleClosePasswordDialog}
                         disabled={changePasswordMutation.isPending}
-                        variant="outlined"
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            color: TEXT_COLOR,
+                            px: 2,
+                        }}
                     >
                         Cancel
-                    </OutlineButton>
+                    </Button>
                     <GradientButton
                         onClick={handleChangePassword}
                         variant="contained"
                         disabled={changePasswordMutation.isPending}
+                        startIcon={changePasswordMutation.isPending ? <RefreshCw size={16} /> : <Key size={16} />}
+                        sx={{
+                            fontSize: '0.85rem',
+                            height: '36px',
+                            px: 2,
+                        }}
                     >
                         {changePasswordMutation.isPending ? 'Changing...' : 'Change Password'}
                     </GradientButton>
                 </DialogActions>
             </Dialog>
 
+            {/* Success Snackbar */}
             <Snackbar
                 open={!!success}
                 autoHideDuration={3000}
@@ -642,21 +1058,34 @@ export const ProfilePage = ({ roleLabel }) => {
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity="success"
-                    sx={{ 
+                    icon={<CheckCircle size={20} />}
+                    sx={{
                         width: '100%',
-                        borderRadius: 2,
+                        borderRadius: '6px',
                         backgroundColor: alpha(GREEN_COLOR, 0.05),
                         borderLeft: `4px solid ${GREEN_COLOR}`,
                         '& .MuiAlert-icon': {
                             color: GREEN_COLOR,
                         },
+                        '& .MuiAlert-message': {
+                            py: 0.5,
+                        }
                     }}
                     elevation={6}
                 >
-                    <Typography fontWeight={500} sx={{ color: TEXT_COLOR }}>{success}</Typography>
+                    <Typography
+                        sx={{
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            color: TEXT_COLOR,
+                        }}
+                    >
+                        {success}
+                    </Typography>
                 </Alert>
             </Snackbar>
 
+            {/* Error Snackbar */}
             <Snackbar
                 open={!!error}
                 autoHideDuration={3000}
@@ -666,18 +1095,30 @@ export const ProfilePage = ({ roleLabel }) => {
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity="error"
-                    sx={{ 
+                    icon={<AlertCircle size={20} />}
+                    sx={{
                         width: '100%',
-                        borderRadius: 2,
+                        borderRadius: '6px',
                         backgroundColor: alpha(RED_COLOR, 0.05),
                         borderLeft: `4px solid ${RED_COLOR}`,
                         '& .MuiAlert-icon': {
                             color: RED_COLOR,
                         },
+                        '& .MuiAlert-message': {
+                            py: 0.5,
+                        }
                     }}
                     elevation={6}
                 >
-                    <Typography fontWeight={500} sx={{ color: TEXT_COLOR }}>{error}</Typography>
+                    <Typography
+                        sx={{
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            color: TEXT_COLOR,
+                        }}
+                    >
+                        {error}
+                    </Typography>
                 </Alert>
             </Snackbar>
         </Box>

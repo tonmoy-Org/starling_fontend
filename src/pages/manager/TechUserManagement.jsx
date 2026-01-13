@@ -15,16 +15,32 @@ import {
     alpha,
     TablePagination,
 } from '@mui/material';
-import {
-    Person as PersonIcon,
-    Search as SearchIcon,
-    Block as BlockIcon,
-    CheckCircle as CheckCircleIcon,
-} from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '../../api/axios';
 import StyledTextField from '../../components/ui/StyledTextField';
 import { Helmet } from 'react-helmet-async';
+
+// Import Lucide React icons
+import {
+    Search,
+    User,
+    UserCog,
+    Shield,
+    CheckCircle,
+    XCircle,
+    Filter,
+    MoreVertical,
+    AlertCircle,
+    Mail,
+    Phone,
+    Calendar,
+    MapPin,
+    Clock,
+    ChevronRight,
+    ChevronLeft,
+    ChevronsLeft,
+    ChevronsRight,
+} from 'lucide-react';
 
 // Define color constants
 const TEXT_COLOR = '#0F1115';
@@ -35,6 +51,8 @@ const RED_COLOR = '#ef4444';
 const RED_DARK = '#dc2626';
 const GREEN_COLOR = '#10b981';
 const GREEN_DARK = '#059669';
+const GRAY_COLOR = '#6b7280';
+const GRAY_LIGHT = '#f3f4f6';
 
 export const TechUserManagement = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -81,24 +99,30 @@ export const TechUserManagement = () => {
 
     const getRoleStyle = (role) => {
         return {
-            backgroundColor: alpha(GREEN_COLOR, 0.1),
-            color: TEXT_COLOR,
-            borderColor: GREEN_COLOR,
+            backgroundColor: alpha(GREEN_COLOR, 0.08),
+            color: GREEN_DARK,
+            border: `1px solid ${alpha(GREEN_COLOR, 0.3)}`,
+            fontSize: '0.75rem',
+            fontWeight: 500,
         };
     };
 
     const getStatusStyle = (isActive) => {
         if (isActive) {
             return {
-                backgroundColor: alpha(GREEN_COLOR, 0.1),
-                color: TEXT_COLOR,
-                borderColor: GREEN_COLOR,
+                backgroundColor: alpha(GREEN_COLOR, 0.08),
+                color: GREEN_DARK,
+                border: `1px solid ${alpha(GREEN_COLOR, 0.3)}`,
+                fontSize: '0.75rem',
+                fontWeight: 500,
             };
         } else {
             return {
-                backgroundColor: alpha(RED_COLOR, 0.1),
-                color: TEXT_COLOR,
-                borderColor: RED_COLOR,
+                backgroundColor: alpha(RED_COLOR, 0.08),
+                color: RED_DARK,
+                border: `1px solid ${alpha(RED_COLOR, 0.3)}`,
+                fontSize: '0.75rem',
+                fontWeight: 500,
             };
         }
     };
@@ -107,13 +131,159 @@ export const TechUserManagement = () => {
         return isActive ? 'Active' : 'Inactive';
     };
 
+    const getStatusIcon = (isActive) => {
+        return isActive ? (
+            <CheckCircle size={14} style={{ marginRight: 4 }} />
+        ) : (
+            <XCircle size={14} style={{ marginRight: 4 }} />
+        );
+    };
+
     if (isLoading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress sx={{ color: BLUE_COLOR }} />
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+                <CircularProgress
+                    sx={{
+                        color: BLUE_COLOR,
+                        width: '32px !important',
+                        height: '32px !important',
+                    }}
+                />
             </Box>
         );
     }
+
+    // Custom pagination icons
+    const PaginationActions = ({ count, page, rowsPerPage, onPageChange }) => {
+        const handleFirstPageButtonClick = (event) => {
+            onPageChange(event, 0);
+        };
+
+        const handleBackButtonClick = (event) => {
+            onPageChange(event, page - 1);
+        };
+
+        const handleNextButtonClick = (event) => {
+            onPageChange(event, page + 1);
+        };
+
+        const handleLastPageButtonClick = (event) => {
+            onPageChange(event, Math.max(0, Math.ceil(count / rowsPerPage) - 1));
+        };
+
+        return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title="First Page">
+                    <Box
+                        component="button"
+                        onClick={handleFirstPageButtonClick}
+                        disabled={page === 0}
+                        sx={{
+                            padding: '4px',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: page === 0 ? 'default' : 'pointer',
+                            color: page === 0 ? GRAY_COLOR : TEXT_COLOR,
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            '&:hover': page === 0 ? {} : {
+                                backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            },
+                            '&:disabled': {
+                                opacity: 0.5,
+                                cursor: 'default',
+                            },
+                        }}
+                    >
+                        <ChevronsLeft size={16} />
+                    </Box>
+                </Tooltip>
+                <Tooltip title="Previous Page">
+                    <Box
+                        component="button"
+                        onClick={handleBackButtonClick}
+                        disabled={page === 0}
+                        sx={{
+                            padding: '4px',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: page === 0 ? 'default' : 'pointer',
+                            color: page === 0 ? GRAY_COLOR : TEXT_COLOR,
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            '&:hover': page === 0 ? {} : {
+                                backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            },
+                            '&:disabled': {
+                                opacity: 0.5,
+                                cursor: 'default',
+                            },
+                        }}
+                    >
+                        <ChevronLeft size={16} />
+                    </Box>
+                </Tooltip>
+                <Tooltip title="Next Page">
+                    <Box
+                        component="button"
+                        onClick={handleNextButtonClick}
+                        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
+                        sx={{
+                            padding: '4px',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: page >= Math.ceil(count / rowsPerPage) - 1 ? 'default' : 'pointer',
+                            color: page >= Math.ceil(count / rowsPerPage) - 1 ? GRAY_COLOR : TEXT_COLOR,
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            '&:hover': page >= Math.ceil(count / rowsPerPage) - 1 ? {} : {
+                                backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            },
+                            '&:disabled': {
+                                opacity: 0.5,
+                                cursor: 'default',
+                            },
+                        }}
+                    >
+                        <ChevronRight size={16} />
+                    </Box>
+                </Tooltip>
+                <Tooltip title="Last Page">
+                    <Box
+                        component="button"
+                        onClick={handleLastPageButtonClick}
+                        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
+                        sx={{
+                            padding: '4px',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: page >= Math.ceil(count / rowsPerPage) - 1 ? 'default' : 'pointer',
+                            color: page >= Math.ceil(count / rowsPerPage) - 1 ? GRAY_COLOR : TEXT_COLOR,
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            '&:hover': page >= Math.ceil(count / rowsPerPage) - 1 ? {} : {
+                                backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            },
+                            '&:disabled': {
+                                opacity: 0.5,
+                                cursor: 'default',
+                            },
+                        }}
+                    >
+                        <ChevronsRight size={16} />
+                    </Box>
+                </Tooltip>
+            </Box>
+        );
+    };
 
     return (
         <Box>
@@ -123,73 +293,106 @@ export const TechUserManagement = () => {
             </Helmet>
 
             {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography
                         sx={{
-                            fontWeight: 500,
+                            fontWeight: 600,
                             mb: 0.5,
-                            fontSize: 20,
+                            fontSize: '0.95rem',
                             color: TEXT_COLOR,
+                            letterSpacing: '-0.01em',
                         }}
                     >
                         Tech User Management
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: GRAY_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 400,
+                        }}
+                    >
                         Manage tech users and their roles
                     </Typography>
                 </Box>
             </Box>
 
-            {/* Search Bar */}
+            {/* Search Bar and Table */}
             <Paper
                 elevation={0}
                 sx={{
-                    mb: 5,
-                    borderRadius: 2,
+                    mb: 4,
+                    borderRadius: '6px',
                     overflow: 'hidden',
-                    border: `1px solid ${alpha(BLUE_COLOR, 0.3)}`,
+                    border: `1px solid ${alpha(BLUE_COLOR, 0.15)}`,
                     bgcolor: 'white'
                 }}
             >
                 <Box
                     sx={{
-                        p: 1.2,
+                        p: 1.5,
                         bgcolor: 'white',
-                        borderBottom: `3px solid ${BLUE_COLOR}`,
+                        borderBottom: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                     }}
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography
-                            sx={{ fontSize: '1rem', color: TEXT_COLOR }}
-                            fontWeight={600}>
-                            Tech Users
-                            <Chip
-                                size="small"
-                                label={filteredUsers.length}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <UserCog size={18} color={BLUE_COLOR} />
+                            <Typography
                                 sx={{
-                                    ml: 1,
-                                    bgcolor: alpha(BLUE_COLOR, 0.1),
-                                    color: TEXT_COLOR
+                                    fontSize: '0.9rem',
+                                    color: TEXT_COLOR,
+                                    fontWeight: 600,
                                 }}
-                            />
-                        </Typography>
+                            >
+                                Tech Users
+                            </Typography>
+                        </Box>
+                        <Chip
+                            size="small"
+                            label={filteredUsers.length}
+                            sx={{
+                                bgcolor: alpha(BLUE_COLOR, 0.08),
+                                color: TEXT_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                height: '22px',
+                                '& .MuiChip-label': {
+                                    px: 1,
+                                },
+                            }}
+                        />
                     </Box>
 
                     {/* Search Field in Header */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <StyledTextField
                             size="small"
                             placeholder="Search by name or email..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            sx={{ width: 300 }}
+                            sx={{
+                                width: 280,
+                                '& .MuiInputBase-root': {
+                                    fontSize: '0.8rem',
+                                    height: '36px',
+                                },
+                            }}
                             InputProps={{
                                 startAdornment: (
-                                    <SearchIcon sx={{ mr: 1, color: BLUE_COLOR, fontSize: 'small' }} />
+                                    <Box sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        mr: 1,
+                                        color: BLUE_COLOR
+                                    }}>
+                                        <Search size={16} />
+                                    </Box>
                                 ),
                             }}
                         />
@@ -199,32 +402,43 @@ export const TechUserManagement = () => {
                 <TableContainer>
                     <Table size="small">
                         <TableHead>
-                            <TableRow sx={{ bgcolor: alpha(BLUE_COLOR, 0.06) }}>
+                            <TableRow sx={{
+                                bgcolor: alpha(BLUE_COLOR, 0.04),
+                                '& th': {
+                                    borderBottom: `2px solid ${alpha(BLUE_COLOR, 0.1)}`,
+                                }
+                            }}>
                                 <TableCell sx={{
                                     fontWeight: 600,
                                     color: TEXT_COLOR,
-                                    fontSize: '0.875rem'
+                                    fontSize: '0.8rem',
+                                    py: 1.5,
+                                    pl: 2.5,
                                 }}>
                                     Name
                                 </TableCell>
                                 <TableCell sx={{
                                     fontWeight: 600,
                                     color: TEXT_COLOR,
-                                    fontSize: '0.875rem'
+                                    fontSize: '0.8rem',
+                                    py: 1.5,
                                 }}>
                                     Email
                                 </TableCell>
                                 <TableCell sx={{
                                     fontWeight: 600,
                                     color: TEXT_COLOR,
-                                    fontSize: '0.875rem'
+                                    fontSize: '0.8rem',
+                                    py: 1.5,
                                 }}>
                                     Role
                                 </TableCell>
                                 <TableCell sx={{
                                     fontWeight: 600,
                                     color: TEXT_COLOR,
-                                    fontSize: '0.875rem'
+                                    fontSize: '0.8rem',
+                                    py: 1.5,
+                                    pr: 2.5,
                                 }}>
                                     Status
                                 </TableCell>
@@ -233,11 +447,26 @@ export const TechUserManagement = () => {
                         <TableBody>
                             {paginatedUsers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} align="center" sx={{ py: 8 }}>
-                                        <PersonIcon sx={{ fontSize: 48, color: alpha(TEXT_COLOR, 0.1), mb: 2 }} />
-                                        <Typography variant="body2" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
-                                            {searchQuery ? 'No tech users found matching your search.' : 'No tech users found.'}
-                                        </Typography>
+                                    <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
+                                        <Box sx={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                        }}>
+                                            <User size={32} color={alpha(TEXT_COLOR, 0.2)} />
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: TEXT_COLOR,
+                                                    opacity: 0.6,
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: 500,
+                                                }}
+                                            >
+                                                {searchQuery ? 'No tech users found matching your search.' : 'No tech users found.'}
+                                            </Typography>
+                                        </Box>
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -248,71 +477,104 @@ export const TechUserManagement = () => {
                                         sx={{
                                             bgcolor: 'white',
                                             '&:hover': {
-                                                backgroundColor: alpha(BLUE_COLOR, 0.03),
+                                                backgroundColor: alpha(BLUE_COLOR, 0.02),
+                                            },
+                                            '&:last-child td': {
+                                                borderBottom: 'none',
                                             },
                                         }}
                                     >
-                                        <TableCell>
+                                        <TableCell sx={{ pl: 2.5, py: 1.5 }}>
                                             <Box display="flex" alignItems="center" gap={1.5}>
                                                 <Box sx={{
-                                                    width: 36,
-                                                    height: 36,
-                                                    borderRadius: '50%',
+                                                    width: 32,
+                                                    height: 32,
+                                                    borderRadius: '6px',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     background: `linear-gradient(135deg, ${BLUE_LIGHT} 0%, ${BLUE_COLOR} 100%)`,
                                                     color: 'white',
                                                     fontWeight: 600,
-                                                    fontSize: '0.875rem',
+                                                    fontSize: '0.8rem',
                                                 }}>
                                                     {user.name?.charAt(0).toUpperCase()}
                                                 </Box>
                                                 <Box>
-                                                    <Typography variant="body2" fontWeight="medium" sx={{ color: TEXT_COLOR }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        fontWeight="600"
+                                                        sx={{
+                                                            color: TEXT_COLOR,
+                                                            fontSize: '0.85rem',
+                                                            lineHeight: 1.2,
+                                                        }}
+                                                    >
                                                         {user.name}
                                                     </Typography>
-                                                    <Typography variant="caption" sx={{ color: TEXT_COLOR, opacity: 0.7 }}>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: GRAY_COLOR,
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: 400,
+                                                        }}
+                                                    >
                                                         ID: {user._id?.substring(0, 8)}...
                                                     </Typography>
                                                 </Box>
                                             </Box>
                                         </TableCell>
-                                        <TableCell>
-                                            <Typography variant="body2" sx={{ color: TEXT_COLOR }}>
-                                                {user.email}
-                                            </Typography>
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Mail size={14} color={GRAY_COLOR} />
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: TEXT_COLOR,
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: 400,
+                                                    }}
+                                                >
+                                                    {user.email}
+                                                </Typography>
+                                            </Box>
                                         </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label="TECH"
-                                                size="small"
-                                                sx={{
-                                                    fontWeight: 500,
-                                                    ...getRoleStyle(user.role),
-                                                    '& .MuiChip-label': {
-                                                        px: 1.5,
-                                                    },
-                                                }}
-                                            />
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Shield size={14} color={GREEN_DARK} />
+                                                <Chip
+                                                    label="TECH"
+                                                    size="small"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        ...getRoleStyle(user.role),
+                                                        height: '22px',
+                                                        '& .MuiChip-label': {
+                                                            px: 1,
+                                                            fontSize: '0.75rem',
+                                                        },
+                                                    }}
+                                                />
+                                            </Box>
                                         </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={getStatusLabel(user.isActive)}
-                                                size="small"
-                                                variant="outlined"
-                                                icon={user.isActive ?
-                                                    <CheckCircleIcon sx={{ fontSize: 16 }} /> :
-                                                    <BlockIcon sx={{ fontSize: 16 }} />
-                                                }
-                                                sx={{
-                                                    fontWeight: 500,
-                                                    ...getStatusStyle(user.isActive),
-                                                    '& .MuiChip-label': {
-                                                        px: 1.5,
-                                                    },
-                                                }}
-                                            />
+                                        <TableCell sx={{ pr: 2.5, py: 1.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                {getStatusIcon(user.isActive)}
+                                                <Chip
+                                                    label={getStatusLabel(user.isActive)}
+                                                    size="small"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        ...getStatusStyle(user.isActive),
+                                                        height: '22px',
+                                                        '& .MuiChip-label': {
+                                                            px: 1,
+                                                            fontSize: '0.75rem',
+                                                        },
+                                                    }}
+                                                />
+                                            </Box>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -322,37 +584,76 @@ export const TechUserManagement = () => {
 
                     {/* Pagination */}
                     {filteredUsers.length > 0 && (
-                        <TablePagination
-                            rowsPerPageOptions={[5, 10, 25, 50]}
-                            component="div"
-                            count={filteredUsers.length}
-                            rowsPerPage={rowsPerPage}
-                            page={page}
-                            onPageChange={handleChangePage}
-                            onRowsPerPageChange={handleChangeRowsPerPage}
-                            sx={{
-                                borderTop: `1px solid ${alpha(TEXT_COLOR, 0.1)}`,
-                                '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                                    fontSize: '0.875rem',
-                                    color: TEXT_COLOR,
-                                    opacity: 0.7,
-                                },
-                                '& .MuiTablePagination-actions': {
-                                    '& .MuiIconButton-root': {
-                                        '&:hover': {
-                                            backgroundColor: alpha(BLUE_COLOR, 0.1),
-                                        },
-                                    },
-                                },
-                                '& .MuiSelect-select': {
-                                    padding: '6px 32px 6px 12px',
-                                    color: TEXT_COLOR,
-                                },
-                                '& .MuiSvgIcon-root': {
-                                    color: TEXT_COLOR,
-                                },
-                            }}
-                        />
+                        <Box sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            px: 2,
+                            py: 1.5,
+                            borderTop: `1px solid ${alpha(TEXT_COLOR, 0.08)}`,
+                            backgroundColor: alpha(BLUE_COLOR, 0.02),
+                        }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Showing {page * rowsPerPage + 1} to {Math.min((page + 1) * rowsPerPage, filteredUsers.length)} of {filteredUsers.length} users
+                            </Typography>
+
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: GRAY_COLOR,
+                                            fontSize: '0.8rem',
+                                            fontWeight: 400,
+                                        }}
+                                    >
+                                        Rows per page:
+                                    </Typography>
+                                    <Box
+                                        component="select"
+                                        value={rowsPerPage}
+                                        onChange={handleChangeRowsPerPage}
+                                        sx={{
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            border: `1px solid ${alpha(TEXT_COLOR, 0.1)}`,
+                                            backgroundColor: 'white',
+                                            fontSize: '0.8rem',
+                                            color: TEXT_COLOR,
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                                borderColor: BLUE_COLOR,
+                                            },
+                                            '&:focus': {
+                                                outline: 'none',
+                                                borderColor: BLUE_COLOR,
+                                                boxShadow: `0 0 0 2px ${alpha(BLUE_COLOR, 0.1)}`,
+                                            },
+                                        }}
+                                    >
+                                        {[5, 10, 25, 50].map((option) => (
+                                            <option key={option} value={option}>
+                                                {option}
+                                            </option>
+                                        ))}
+                                    </Box>
+                                </Box>
+
+                                <PaginationActions
+                                    count={filteredUsers.length}
+                                    page={page}
+                                    rowsPerPage={rowsPerPage}
+                                    onPageChange={handleChangePage}
+                                />
+                            </Box>
+                        </Box>
                     )}
                 </TableContainer>
             </Paper>

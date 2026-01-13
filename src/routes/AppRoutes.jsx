@@ -78,7 +78,7 @@ export const AppRoutes = () => {
         >
           <Route index element={<ManagerDashboard />} />
           <Route path="profile" element={<ManagerProfile />} />
-          <Route path="techs" element={<TechUserManagement />} />
+          <Route path="technicians" element={<TechUserManagement />} />
           <Route path="locates" element={<Locates />} />
 
           {/* Health Department Reports */}

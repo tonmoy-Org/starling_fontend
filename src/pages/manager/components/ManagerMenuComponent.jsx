@@ -1,172 +1,166 @@
 import React, { useState } from 'react';
 import {
-    Dashboard as DashboardIcon,
-    People as PeopleIcon,
-    Assignment as AssignmentIcon,
-    AccountCircle as AccountIcon,
-    Notifications as NotificationsIcon,
-    HealthAndSafety as HealthIcon,
-    Schedule as ScheduleIcon,
-    TrendingUp as PerformanceIcon,
-    History as HistoryIcon,
-    Description as FormIcon,
-    Visibility as ReviewIcon,
-    CheckCircle as ApprovalIcon,
-    Assessment as AssessmentIcon,
-    DirectionsCar as VehicleIcon,
-    Inventory as InventoryIcon,
-    Map as LogisticsIcon,
-    LocalShipping as DispatchIcon,
-    RequestQuote as QuoteIcon,
-    Contacts as LeadsIcon,
-    LocationOn as LocateIcon,
-    Search as LookupIcon,
-    ListAlt as ChecklistIcon,
-    Engineering as RepairIcon,
-    Star as ScorecardIcon,
-    Book as LibraryIcon,
-    ExpandMore as ExpandMoreIcon,
-    ExpandLess as ExpandLessIcon,
-    // Sub-item icons
-    Description as ReportIcon,
-    Assessment as AssessmentReportIcon,
-    Timeline as TimelineIcon,
-} from '@mui/icons-material';
+    LayoutDashboard,
+    Users,
+    ClipboardList,
+    BarChart3,
+    Briefcase,
+    Truck,
+    Map,
+    MapPin,
+    ListChecks,
+    FileText,
+    Car,
+    GraduationCap,
+    LibraryBig,
+    ChevronDown,
+    ChevronUp,
+    Database,
+    SignalHigh,
+} from 'lucide-react';
 
 export const ManagerMenuComponent = ({ onMenuItemClick }) => {
     const [expandedSections, setExpandedSections] = useState({
-        'health-reports': false
+        'general-section': false,
+        'management-section': false,
+        'system-section': false,
+        'resources-section': false,
+        'operations-subsection': false,
+        'workorders-subsection': false,
+        'assets-subsection': false,
+        'reports-subsection': false,
     });
 
     const toggleSection = (sectionId) => {
         setExpandedSections(prev => ({
             ...prev,
-            [sectionId]: !prev[sectionId]
+            [sectionId]: !prev[sectionId],
         }));
     };
 
     const menuItems = [
-        // Dashboard & Overview
+        // 🧭 GENERAL
         {
-            sectionName: 'Dashboard & Overview',
-            items: [
-                { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard' },
-                { text: 'Overview', icon: <AssessmentIcon />, path: '/manager-dashboard/overview' },
-                { text: 'Notifications', icon: <NotificationsIcon />, path: '/manager-dashboard/notifications' },
-            ]
-        },
-
-        // Dispatch & Logistics
-        {
-            sectionName: 'Dispatch & Logistics',
-            items: [
-                { text: 'Dispatch', icon: <DispatchIcon />, path: '/manager-dashboard/dispatch' },
-                { text: 'Logistics Map', icon: <LogisticsIcon />, path: '/manager-dashboard/logistics' },
-                { text: 'Locates', icon: <LocateIcon />, path: '/manager-dashboard/locates' },
-            ]
-        },
-
-        // Reports & Compliance - Updated with collapsible health reports
-        {
-            sectionName: 'Reports & Compliance',
+            sectionName: 'General',
+            sectionId: 'general-section',
+            isExpandable: true,
             items: [
                 {
-                    text: 'Health Department Reports',
-                    icon: <HealthIcon />,
-                    path: '#',
+                    text: 'Dashboard',
+                    icon: <LayoutDashboard size={18} />,
+                    path: '/manager-dashboard',
+                },
+                {
+                    text: 'Overview',
+                    icon: <BarChart3 size={18} />,
+                    path: '/manager-dashboard/overview',
+                },
+                {
+                    text: 'Operations',
+                    icon: <Briefcase size={18} />,
                     isExpandable: true,
-                    sectionId: 'health-reports',
-                    expandIcon: <ExpandMoreIcon />,
+                    sectionId: 'operations-subsection',
                     subItems: [
                         {
-                            text: 'RME Reports',
-                            icon: <ReportIcon />,
-                            path: '/manager-dashboard/health-department-reports/rme'
+                            text: 'Dispatch',
+                            icon: <Truck size={16} />,
+                            path: '/manager-dashboard/dispatch',
                         },
                         {
-                            text: 'RSS Reports',
-                            icon: <AssessmentReportIcon />,
-                            path: '/manager-dashboard/health-department-reports/rss'
+                            text: 'Logistics Map',
+                            icon: <Map size={16} />,
+                            path: '/manager-dashboard/logistics-map',
                         },
                         {
-                            text: 'TOS Reports',
-                            icon: <TimelineIcon />,
-                            path: '/manager-dashboard/health-department-reports/tos'
-                        }
-                    ]
+                            text: 'Locates',
+                            icon: <MapPin size={16} />,
+                            path: '/manager-dashboard/locates',
+                        },
+                    ],
                 },
-                { text: 'My Scorecard', icon: <ScorecardIcon />, path: '/manager-dashboard/my-scorecard' },
-            ]
+                {
+                    text: 'Work Orders',
+                    icon: <ListChecks size={18} />,
+                    isExpandable: true,
+                    sectionId: 'workorders-subsection',
+                    subItems: [], // ✅ empty sub items
+                },
+            ],
         },
 
-        // Vehicles & Inventory
+        // 🛠️ MANAGEMENT
         {
-            sectionName: 'Vehicles & Inventory',
+            sectionName: 'Management',
+            sectionId: 'management-section',
+            isExpandable: true,
             items: [
-                { text: 'Vehicles & Tools', icon: <VehicleIcon />, path: '/manager-dashboard/vehicles' },
-                { text: 'Inventory', icon: <InventoryIcon />, path: '/manager-dashboard/inventory' },
-            ]
+                {
+                    text: 'Technicians',
+                    icon: <Users size={18} />,
+                    path: '/manager-dashboard/technicians',
+                },
+                {
+                    text: 'Sales',
+                    icon: <ClipboardList size={18} />,
+                    path: '/manager-dashboard/sales',
+                },
+            ],
         },
 
-        // Quotes & Leads
+        // ⚙️ SYSTEM
         {
-            sectionName: 'Quotes & Leads',
+            sectionName: 'System',
+            sectionId: 'system-section',
+            isExpandable: true,
             items: [
-                { text: 'Quotes', icon: <QuoteIcon />, path: '/manager-dashboard/quotes' },
-                { text: 'Leads', icon: <LeadsIcon />, path: '/manager-dashboard/leads' },
-            ]
+                {
+                    text: 'Assets',
+                    icon: <Database size={18} />,
+                    isExpandable: true,
+                    sectionId: 'assets-subsection',
+                    subItems: [], // ✅ empty sub items
+                },
+                {
+                    text: 'Reports',
+                    icon: <SignalHigh size={18} />, 
+                    isExpandable: true,
+                    sectionId: 'reports-subsection',
+                    subItems: [], // ✅ empty sub items
+                },
+                {
+                    text: 'Forms',
+                    icon: <FileText size={18} />,
+                    path: '/manager-dashboard/forms',
+                },
+            ],
         },
 
-        // Technician Management
+        // 📚 RESOURCES
         {
-            sectionName: 'Technician Management',
+            sectionName: 'Resources',
+            sectionId: 'resources-section',
+            isExpandable: true,
             items: [
-                { text: 'Technicians', icon: <PeopleIcon />, path: '/manager-dashboard/techs' },
-                { text: 'Scheduling', icon: <ScheduleIcon />, path: '/manager-dashboard/techs/schedule' },
-                { text: 'Performance', icon: <PerformanceIcon />, path: '/manager-dashboard/techs/performance' },
-                { text: 'Tech History', icon: <HistoryIcon />, path: '/manager-dashboard/techs/history' },
-            ]
-        },
-
-        // Installations & Repairs
-        {
-            sectionName: 'Installations & Repairs',
-            items: [
-                { text: 'Installation Checklists', icon: <ChecklistIcon />, path: '/manager-dashboard/installations' },
-                { text: 'Tank Repairs', icon: <RepairIcon />, path: '/manager-dashboard/tank-repairs' },
-            ]
-        },
-
-        // Forms & Compliance
-        {
-            sectionName: 'Forms & Compliance',
-            items: [
-                { text: 'Forms', icon: <FormIcon />, path: '/manager-dashboard/forms' },
-                { text: 'Review Forms', icon: <ReviewIcon />, path: '/manager-dashboard/forms/review' },
-                { text: 'Form Approval', icon: <ApprovalIcon />, path: '/manager-dashboard/forms/approval' },
-            ]
-        },
-
-        // Tasks & Library
-        {
-            sectionName: 'Tasks & Resources',
-            items: [
-                { text: 'Tasks', icon: <AssignmentIcon />, path: '/manager-dashboard/tasks' },
-                { text: 'Library', icon: <LibraryIcon />, path: '/manager-dashboard/library' },
-                { text: 'Lookup', icon: <LookupIcon />, path: '/manager-dashboard/lookup' },
-            ]
-        },
-
-        // Profile
-        {
-            sectionName: 'Profile',
-            items: [
-                { text: 'My Profile', icon: <AccountIcon />, path: '/manager-dashboard/profile' },
-            ]
+                {
+                    text: 'Training',
+                    icon: <GraduationCap size={18} />,
+                    path: '/manager-dashboard/training',
+                },
+                {
+                    text: 'Tasks',
+                    icon: <ClipboardList size={18} />,
+                    path: '/manager-dashboard/tasks',
+                },
+                {
+                    text: 'Library',
+                    icon: <LibraryBig size={18} />,
+                    path: '/manager-dashboard/library',
+                },
+            ],
         },
     ];
 
-    // Process menu items to add click handlers
+    // 🔄 Process menu items
     const processedMenuItems = menuItems.map(section => {
         const processedItems = section.items.map(item => {
             if (item.isExpandable) {
@@ -174,22 +168,30 @@ export const ManagerMenuComponent = ({ onMenuItemClick }) => {
                     ...item,
                     onClick: () => toggleSection(item.sectionId),
                     expanded: expandedSections[item.sectionId] || false,
-                    expandIcon: expandedSections[item.sectionId] ? <ExpandLessIcon /> : <ExpandMoreIcon />,
+                    expandIcon: expandedSections[item.sectionId]
+                        ? <ChevronUp size={16} />
+                        : <ChevronDown size={16} />,
                     subItems: item.subItems.map(subItem => ({
                         ...subItem,
-                        onClick: () => onMenuItemClick(subItem.path)
-                    }))
+                        onClick: () => onMenuItemClick(subItem.path),
+                    })),
                 };
             }
+
             return {
                 ...item,
-                onClick: () => onMenuItemClick(item.path)
+                onClick: () => onMenuItemClick(item.path),
             };
         });
 
         return {
             ...section,
-            items: processedItems
+            onClick: () => toggleSection(section.sectionId),
+            expanded: expandedSections[section.sectionId] || false,
+            expandIcon: expandedSections[section.sectionId]
+                ? <ChevronUp size={16} />
+                : <ChevronDown size={16} />,
+            items: processedItems,
         };
     });
 

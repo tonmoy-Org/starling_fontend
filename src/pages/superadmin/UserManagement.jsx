@@ -146,7 +146,7 @@ export const UserManagement = () => {
 
     const createUserMutation = useMutation({
         mutationFn: async (userData) => {
-            const response = await axiosInstance.post('/users', userData);
+            const response = await axiosInstance.post('/users/', userData);
             return response.data;
         },
         onSuccess: () => {
@@ -165,7 +165,7 @@ export const UserManagement = () => {
 
     const deleteUserMutation = useMutation({
         mutationFn: async (userId) => {
-            const response = await axiosInstance.delete(`/users/${userId}`);
+            const response = await axiosInstance.delete(`/users/${userId}/`);
             return response.data;
         },
         onSuccess: () => {
@@ -188,7 +188,7 @@ export const UserManagement = () => {
 
     const updateUserMutation = useMutation({
         mutationFn: async ({ userId, userData }) => {
-            const response = await axiosInstance.put(`/users/${userId}`, userData);
+            const response = await axiosInstance.put(`/users/${userId}/`, userData);
             return response.data;
         },
         onSuccess: () => {
@@ -253,7 +253,7 @@ export const UserManagement = () => {
 
     const handleDeleteConfirm = () => {
         if (userToDelete) {
-            deleteUserMutation.mutate(userToDelete._id);
+            deleteUserMutation.mutate(userToDelete.id);
         }
     };
 
@@ -264,7 +264,7 @@ export const UserManagement = () => {
 
     const handleToggleStatusConfirm = () => {
         if (userToToggle) {
-            toggleUserStatusMutation.mutate(userToToggle._id);
+            toggleUserStatusMutation.mutate(userToToggle.id);
         }
     };
 
@@ -299,7 +299,7 @@ export const UserManagement = () => {
             if (!updateData.password) {
                 delete updateData.password;
             }
-            updateUserMutation.mutate({ userId: selectedUser._id, userData: updateData });
+            updateUserMutation.mutate({ userId: selectedUser.id, userData: updateData });
         } else {
             createUserMutation.mutate(formData);
         }

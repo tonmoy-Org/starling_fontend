@@ -24,7 +24,7 @@ import {
     DialogContent,
     DialogActions,
     InputAdornment,
-    DialogContentText,
+    TablePagination,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
@@ -169,9 +169,18 @@ const Locates = () => {
     // Get user data from localStorage
     const userData = getUserDataFromStorage();
 
+    // Selection states
     const [selectedExcavator, setSelectedExcavator] = useState(new Set());
     const [selectedInProgress, setSelectedInProgress] = useState(new Set());
     const [selectedCompleted, setSelectedCompleted] = useState(new Set());
+
+    // Pagination states
+    const [pageExcavator, setPageExcavator] = useState(0);
+    const [rowsPerPageExcavator, setRowsPerPageExcavator] = useState(10);
+    const [pageInProgress, setPageInProgress] = useState(0);
+    const [rowsPerPageInProgress, setRowsPerPageInProgress] = useState(10);
+    const [pageCompleted, setPageCompleted] = useState(0);
+    const [rowsPerPageCompleted, setRowsPerPageCompleted] = useState(10);
 
     // Dialogs
     const [tagDialogOpen, setTagDialogOpen] = useState(false);
@@ -208,12 +217,11 @@ const Locates = () => {
     const { data: rawData = [], isLoading, refetch } = useQuery({
         queryKey: ['locates-all'],
         queryFn: async () => {
-            const res = await axiosInstance.get('/locates/all-locates');
+            const res = await axiosInstance.get('/all-locates');
             return Array.isArray(res.data) ? res.data : res.data?.data || [];
         },
         staleTime: 3 * 60 * 1000,
     });
-    
 
     // ── Mutations ──
     const invalidateAndRefetch = () => {
@@ -221,22 +229,13 @@ const Locates = () => {
         queryClient.refetchQueries({ queryKey: ['locates-all'] });
     };
 
-    const syncMutation = useMutation({
-        mutationFn: () => axiosInstance.get('/locates/sync-dashboard'),
-        onSuccess: () => {
-            invalidateAndRefetch();
-            showSnackbar('Sync completed successfully', 'success');
-        },
-        onError: (err) => showSnackbar(err?.response?.data?.message || 'Sync failed', 'error'),
-    });
-
     const markCalledMutation = useMutation({
         mutationFn: async ({ id, callType }) => {
             console.log('=== FRONTEND DEBUG ===');
             console.log('Marking as called:', { id, callType });
 
             const response = await axiosInstance.patch(
-                `/locates/work-order/${id}/update-call-status`,
+                `/work-order/${id}/update-call-status`,
                 {
                     locatesCalled: true,
                     callType,
@@ -261,7 +260,7 @@ const Locates = () => {
 
     const deleteBulkMutation = useMutation({
         mutationFn: (ids) =>
-            axiosInstance.delete('/locates/work-order/bulk-delete', { data: { ids: Array.from(ids) } }),
+            axiosInstance.delete('/work-order/bulk-delete', { data: { ids: Array.from(ids) } }),
         onSuccess: () => {
             invalidateAndRefetch();
             setSelectedExcavator(new Set());
@@ -275,7 +274,7 @@ const Locates = () => {
     // ── Tagging Mutations ──
     const tagLocatesNeededMutation = useMutation({
         mutationFn: async ({ workOrderNumber, name, email, tags }) => {
-            const response = await axiosInstance.post('/locates/tag-locates-needed', {
+            const response = await axiosInstance.post('/tag-locates-needed', {
                 workOrderNumber,
                 name,
                 email,
@@ -300,7 +299,7 @@ const Locates = () => {
 
     const bulkTagLocatesNeededMutation = useMutation({
         mutationFn: async ({ workOrderNumbers, name, email, tags }) => {
-            const response = await axiosInstance.post('/locates/bulk-tag-locates-needed', {
+            const response = await axiosInstance.post('/bulk-tag-locates-needed', {
                 workOrderNumbers,
                 name,
                 email,
@@ -466,6 +465,34 @@ const Locates = () => {
     const completed = useMemo(() =>
         processed.filter(l => l.locatesCalled && l.isExpired), [processed]);
 
+    // ── Pagination Handlers ──
+    const handleChangePageExcavator = (event, newPage) => {
+        setPageExcavator(newPage);
+    };
+
+    const handleChangeRowsPerPageExcavator = (event) => {
+        setRowsPerPageExcavator(parseInt(event.target.value, 10));
+        setPageExcavator(0);
+    };
+
+    const handleChangePageInProgress = (event, newPage) => {
+        setPageInProgress(newPage);
+    };
+
+    const handleChangeRowsPerPageInProgress = (event) => {
+        setRowsPerPageInProgress(parseInt(event.target.value, 10));
+        setPageInProgress(0);
+    };
+
+    const handleChangePageCompleted = (event, newPage) => {
+        setPageCompleted(newPage);
+    };
+
+    const handleChangeRowsPerPageCompleted = (event) => {
+        setRowsPerPageCompleted(parseInt(event.target.value, 10));
+        setPageCompleted(0);
+    };
+
     // ── Helpers ──
     const showSnackbar = (message, severity = 'success') => {
         setSnackbar({ open: true, message, severity });
@@ -503,6 +530,25 @@ const Locates = () => {
             else newSet.add(id);
             return newSet;
         });
+    };
+
+    const toggleAllSelection = (setState, items, pageItems) => {
+        const allPageIds = new Set(pageItems.map(item => item.id));
+        const currentSelected = new Set(setState);
+
+        // Check if all page items are selected
+        const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
+
+        if (allSelectedOnPage) {
+            // Deselect all page items
+            const newSet = new Set(currentSelected);
+            allPageIds.forEach(id => newSet.delete(id));
+            return newSet;
+        } else {
+            // Select all page items
+            const newSet = new Set([...currentSelected, ...allPageIds]);
+            return newSet;
+        }
     };
 
     // Tagging functions
@@ -575,16 +621,32 @@ const Locates = () => {
     if (isLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress 
-                    sx={{ 
+                <CircularProgress
+                    sx={{
                         color: BLUE_COLOR,
                         width: '32px !important',
                         height: '32px !important',
-                    }} 
+                    }}
                 />
             </Box>
         );
     }
+
+    // Get paginated data for each section
+    const excavatorPageItems = excavatorPending.slice(
+        pageExcavator * rowsPerPageExcavator,
+        pageExcavator * rowsPerPageExcavator + rowsPerPageExcavator
+    );
+
+    const inProgressPageItems = inProgress.slice(
+        pageInProgress * rowsPerPageInProgress,
+        pageInProgress * rowsPerPageInProgress + rowsPerPageInProgress
+    );
+
+    const completedPageItems = completed.slice(
+        pageCompleted * rowsPerPageCompleted,
+        pageCompleted * rowsPerPageCompleted + rowsPerPageCompleted
+    );
 
     return (
         <Box>
@@ -602,9 +664,9 @@ const Locates = () => {
                     >
                         Locate Management
                     </Typography>
-                    <Typography 
-                        variant="body2" 
-                        sx={{ 
+                    <Typography
+                        variant="body2"
+                        sx={{
                             color: GRAY_COLOR,
                             fontSize: '0.8rem',
                             fontWeight: 400,
@@ -614,20 +676,7 @@ const Locates = () => {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<RefreshCw size={16} />}
-                        onClick={() => syncMutation.mutate()}
-                        disabled={syncMutation.isPending}
-                        sx={{ 
-                            textTransform: 'none',
-                            fontSize: '0.8rem',
-                            height: '36px',
-                            px: 2,
-                        }}
-                    >
-                        {syncMutation.isPending ? 'Syncing...' : 'Sync Dashboard'}
-                    </Button>
+                    {/* Sync Dashboard button has been removed */}
                 </Box>
             </Box>
 
@@ -645,7 +694,7 @@ const Locates = () => {
                             placeholder="Search..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            sx={{ 
+                            sx={{
                                 width: 200,
                                 '& .MuiInputBase-root': {
                                     fontSize: '0.8rem',
@@ -678,7 +727,7 @@ const Locates = () => {
                                 onClick={openBulkTagDialog}
                                 size="small"
                                 startIcon={<Tag size={14} />}
-                                sx={{ 
+                                sx={{
                                     textTransform: 'none',
                                     fontSize: '0.75rem',
                                     height: '30px',
@@ -692,15 +741,21 @@ const Locates = () => {
                 }
             >
                 <LocateTable
-                    items={excavatorPending}
+                    items={excavatorPageItems}
                     selected={selectedExcavator}
                     onToggleSelect={(id) => toggleSelection(setSelectedExcavator, id)}
+                    onToggleAll={() => setSelectedExcavator(toggleAllSelection(selectedExcavator, excavatorPending, excavatorPageItems))}
                     onMarkCalled={handleMarkCalled}
                     onTag={openTagDialog}
                     color={ORANGE_COLOR}
                     showCallAction
                     showTagAction
                     showTaggedBy
+                    totalCount={excavatorPending.length}
+                    page={pageExcavator}
+                    rowsPerPage={rowsPerPageExcavator}
+                    onPageChange={handleChangePageExcavator}
+                    onRowsPerPageChange={handleChangeRowsPerPageExcavator}
                 />
             </Section>
 
@@ -714,13 +769,19 @@ const Locates = () => {
                 showTimer
             >
                 <LocateTable
-                    items={inProgress}
+                    items={inProgressPageItems}
                     selected={selectedInProgress}
                     onToggleSelect={(id) => toggleSelection(setSelectedInProgress, id)}
+                    onToggleAll={() => setSelectedInProgress(toggleAllSelection(selectedInProgress, inProgress, inProgressPageItems))}
                     color={BLUE_COLOR}
                     showTimerColumn
                     showCalledBy
                     currentTime={currentTime}
+                    totalCount={inProgress.length}
+                    page={pageInProgress}
+                    rowsPerPage={rowsPerPageInProgress}
+                    onPageChange={handleChangePageInProgress}
+                    onRowsPerPageChange={handleChangeRowsPerPageInProgress}
                 />
             </Section>
 
@@ -733,12 +794,18 @@ const Locates = () => {
                 onDelete={() => confirmBulkDelete(selectedCompleted, 'Completed')}
             >
                 <LocateTable
-                    items={completed}
+                    items={completedPageItems}
                     selected={selectedCompleted}
                     onToggleSelect={(id) => toggleSelection(setSelectedCompleted, id)}
+                    onToggleAll={() => setSelectedCompleted(toggleAllSelection(selectedCompleted, completed, completedPageItems))}
                     color={GREEN_COLOR}
                     showCalledBy
                     showTimerColumn={false}
+                    totalCount={completed.length}
+                    page={pageCompleted}
+                    rowsPerPage={rowsPerPageCompleted}
+                    onPageChange={handleChangePageCompleted}
+                    onRowsPerPageChange={handleChangeRowsPerPageCompleted}
                 />
             </Section>
 
@@ -774,7 +841,7 @@ const Locates = () => {
                             <Trash2 size={18} />
                         </Box>
                         <Box>
-                            <Typography variant="h6" sx={{ 
+                            <Typography variant="h6" sx={{
                                 color: TEXT_COLOR,
                                 fontSize: '0.95rem',
                                 fontWeight: 600,
@@ -782,7 +849,7 @@ const Locates = () => {
                             }}>
                                 Confirm Deletion
                             </Typography>
-                            <Typography variant="caption" sx={{ 
+                            <Typography variant="caption" sx={{
                                 color: GRAY_COLOR,
                                 fontSize: '0.75rem',
                                 fontWeight: 400,
@@ -793,9 +860,9 @@ const Locates = () => {
                     </Box>
                 </DialogTitle>
                 <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography 
-                        variant="body2" 
-                        sx={{ 
+                    <Typography
+                        variant="body2"
+                        sx={{
                             color: TEXT_COLOR,
                             fontSize: '0.85rem',
                             fontWeight: 400,
@@ -815,9 +882,9 @@ const Locates = () => {
                     }}>
                         <AlertTriangle size={18} color={RED_COLOR} />
                         <Box>
-                            <Typography 
-                                variant="body2" 
-                                sx={{ 
+                            <Typography
+                                variant="body2"
+                                sx={{
                                     color: RED_COLOR,
                                     fontSize: '0.85rem',
                                     fontWeight: 500,
@@ -826,9 +893,9 @@ const Locates = () => {
                             >
                                 Warning
                             </Typography>
-                            <Typography 
-                                variant="caption" 
-                                sx={{ 
+                            <Typography
+                                variant="caption"
+                                sx={{
                                     color: TEXT_COLOR,
                                     fontSize: '0.8rem',
                                     fontWeight: 400,
@@ -842,8 +909,8 @@ const Locates = () => {
                 <DialogActions sx={{ p: 2, pt: 1.5 }}>
                     <Button
                         onClick={() => setDeleteDialogOpen(false)}
-                        sx={{ 
-                            textTransform: 'none', 
+                        sx={{
+                            textTransform: 'none',
                             color: TEXT_COLOR,
                             fontSize: '0.85rem',
                             fontWeight: 400,
@@ -858,7 +925,7 @@ const Locates = () => {
                         color="error"
                         startIcon={<Trash2 size={16} />}
                         disabled={deleteBulkMutation.isPending}
-                        sx={{ 
+                        sx={{
                             textTransform: 'none',
                             fontSize: '0.85rem',
                             fontWeight: 500,
@@ -888,7 +955,7 @@ const Locates = () => {
                     }
                 }}
             >
-                <DialogTitle sx={{ 
+                <DialogTitle sx={{
                     borderBottom: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
                     pb: 1.5,
                 }}>
@@ -906,7 +973,7 @@ const Locates = () => {
                             <Tag size={18} />
                         </Box>
                         <Box>
-                            <Typography variant="h6" sx={{ 
+                            <Typography variant="h6" sx={{
                                 color: TEXT_COLOR,
                                 fontSize: '0.95rem',
                                 fontWeight: 600,
@@ -914,7 +981,7 @@ const Locates = () => {
                             }}>
                                 Tag as Locates Needed
                             </Typography>
-                            <Typography variant="caption" sx={{ 
+                            <Typography variant="caption" sx={{
                                 color: GRAY_COLOR,
                                 fontSize: '0.75rem',
                                 fontWeight: 400,
@@ -927,9 +994,9 @@ const Locates = () => {
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ mt: 2 }}>
                         <Box>
-                            <Typography 
-                                variant="subtitle2" 
-                                sx={{ 
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
                                     color: TEXT_COLOR,
                                     fontSize: '0.8rem',
                                     fontWeight: 600,
@@ -944,9 +1011,9 @@ const Locates = () => {
                                 backgroundColor: alpha(BLUE_COLOR, 0.05),
                                 border: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
                             }}>
-                                <Typography 
-                                    variant="body1" 
-                                    sx={{ 
+                                <Typography
+                                    variant="body1"
+                                    sx={{
                                         color: TEXT_COLOR,
                                         fontSize: '0.9rem',
                                         fontWeight: 600,
@@ -955,9 +1022,9 @@ const Locates = () => {
                                 >
                                     {selectedForTagging[0]?.workOrderNumber || 'N/A'}
                                 </Typography>
-                                <Typography 
-                                    variant="caption" 
-                                    sx={{ 
+                                <Typography
+                                    variant="caption"
+                                    sx={{
                                         color: GRAY_COLOR,
                                         fontSize: '0.75rem',
                                         fontWeight: 400,
@@ -1074,7 +1141,7 @@ const Locates = () => {
                     }
                 }}
             >
-                <DialogTitle sx={{ 
+                <DialogTitle sx={{
                     borderBottom: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
                     pb: 1.5,
                 }}>
@@ -1092,7 +1159,7 @@ const Locates = () => {
                             <Tag size={18} />
                         </Box>
                         <Box>
-                            <Typography variant="h6" sx={{ 
+                            <Typography variant="h6" sx={{
                                 color: TEXT_COLOR,
                                 fontSize: '0.95rem',
                                 fontWeight: 600,
@@ -1101,9 +1168,9 @@ const Locates = () => {
                                 Bulk Tag as Locates Needed
                             </Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                <Chip 
-                                    label={`${selectedForTagging.length} items`} 
-                                    size="small" 
+                                <Chip
+                                    label={`${selectedForTagging.length} items`}
+                                    size="small"
                                     sx={{
                                         height: '20px',
                                         fontSize: '0.7rem',
@@ -1112,7 +1179,7 @@ const Locates = () => {
                                         color: BLUE_COLOR,
                                     }}
                                 />
-                                <Typography variant="caption" sx={{ 
+                                <Typography variant="caption" sx={{
                                     color: GRAY_COLOR,
                                     fontSize: '0.75rem',
                                     fontWeight: 400,
@@ -1126,9 +1193,9 @@ const Locates = () => {
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ mt: 2 }}>
                         <Box>
-                            <Typography 
-                                variant="subtitle2" 
-                                sx={{ 
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
                                     color: TEXT_COLOR,
                                     fontSize: '0.8rem',
                                     fontWeight: 600,
@@ -1146,11 +1213,11 @@ const Locates = () => {
                                 bgcolor: alpha(BLUE_COLOR, 0.02),
                             }}>
                                 {selectedForTagging.map((item, index) => (
-                                    <Box 
-                                        key={index} 
-                                        sx={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
+                                    <Box
+                                        key={index}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
                                             gap: 1,
                                             py: 0.75,
                                             borderBottom: index < selectedForTagging.length - 1 ? `1px solid ${alpha(TEXT_COLOR, 0.05)}` : 'none',
@@ -1158,9 +1225,9 @@ const Locates = () => {
                                     >
                                         <ChevronRight size={14} color={GRAY_COLOR} />
                                         <Box sx={{ flex: 1 }}>
-                                            <Typography 
-                                                variant="body2" 
-                                                sx={{ 
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
                                                     color: TEXT_COLOR,
                                                     fontSize: '0.8rem',
                                                     fontWeight: 500,
@@ -1168,9 +1235,9 @@ const Locates = () => {
                                             >
                                                 {item.workOrderNumber}
                                             </Typography>
-                                            <Typography 
-                                                variant="caption" 
-                                                sx={{ 
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
                                                     color: GRAY_COLOR,
                                                     fontSize: '0.7rem',
                                                     fontWeight: 400,
@@ -1254,8 +1321,8 @@ const Locates = () => {
                 <DialogActions sx={{ p: 2, pt: 1.5 }}>
                     <Button
                         onClick={() => setBulkTagDialogOpen(false)}
-                        sx={{ 
-                            textTransform: 'none', 
+                        sx={{
+                            textTransform: 'none',
                             color: TEXT_COLOR,
                             fontSize: '0.85rem',
                             fontWeight: 400,
@@ -1298,8 +1365,8 @@ const Locates = () => {
                     sx={{
                         width: '100%',
                         borderRadius: '6px',
-                        backgroundColor: snackbar.severity === 'success' 
-                            ? alpha(GREEN_COLOR, 0.05) 
+                        backgroundColor: snackbar.severity === 'success'
+                            ? alpha(GREEN_COLOR, 0.05)
                             : alpha(RED_COLOR, 0.05),
                         borderLeft: `4px solid ${snackbar.severity === 'success' ? GREEN_COLOR : RED_COLOR}`,
                         '& .MuiAlert-icon': {
@@ -1311,8 +1378,8 @@ const Locates = () => {
                     }}
                     elevation={6}
                 >
-                    <Typography 
-                        sx={{ 
+                    <Typography
+                        sx={{
                             fontSize: '0.85rem',
                             fontWeight: 500,
                             color: TEXT_COLOR,
@@ -1359,8 +1426,8 @@ const Section = ({
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Typography
-                    sx={{ 
-                        fontSize: '0.9rem', 
+                    sx={{
+                        fontSize: '0.9rem',
                         color: TEXT_COLOR,
                         fontWeight: 600,
                     }}
@@ -1385,9 +1452,9 @@ const Section = ({
                 {showTimer && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Timer size={16} color={GRAY_COLOR} />
-                        <Typography 
-                            variant="body2" 
-                            sx={{ 
+                        <Typography
+                            variant="body2"
+                            sx={{
                                 color: GRAY_COLOR,
                                 fontSize: '0.75rem',
                                 fontWeight: 400,
@@ -1408,7 +1475,7 @@ const Section = ({
                         size="small"
                         onClick={onDelete}
                         startIcon={<Trash2 size={14} />}
-                        sx={{ 
+                        sx={{
                             textTransform: 'none',
                             fontSize: '0.75rem',
                             height: '30px',
@@ -1429,6 +1496,7 @@ const LocateTable = ({
     items,
     selected,
     onToggleSelect,
+    onToggleAll,
     onMarkCalled,
     onTag,
     color,
@@ -1438,571 +1506,621 @@ const LocateTable = ({
     showTaggedBy = false,
     showTimerColumn = false,
     currentTime,
-}) => (
-    <TableContainer>
-        <Table size="small">
-            <TableHead>
-                <TableRow sx={{ 
-                    bgcolor: alpha(color, 0.04),
-                    '& th': {
-                        borderBottom: `2px solid ${alpha(color, 0.1)}`,
-                    }
-                }}>
-                    <TableCell 
-                        padding="checkbox" 
-                        width={50} 
-                        sx={{ 
+    totalCount,
+    page,
+    rowsPerPage,
+    onPageChange,
+    onRowsPerPageChange,
+}) => {
+    const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
+    const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
+
+    return (
+        <TableContainer>
+            <Table size="small">
+                <TableHead>
+                    <TableRow sx={{
+                        bgcolor: alpha(color, 0.04),
+                        '& th': {
+                            borderBottom: `2px solid ${alpha(color, 0.1)}`,
+                        }
+                    }}>
+                        <TableCell
+                            padding="checkbox"
+                            width={50}
+                            sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                                pl: 2.5,
+                            }}
+                        >
+                            <Checkbox
+                                size="small"
+                                checked={allSelectedOnPage}
+                                indeterminate={someSelectedOnPage && !allSelectedOnPage}
+                                onChange={onToggleAll}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    padding: '4px',
+                                }}
+                            />
+                        </TableCell>
+                        {showCallAction && (
+                            <TableCell
+                                width={220}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
+                                }}
+                            >
+                                Call Action
+                            </TableCell>
+                        )}
+                        {showTagAction && (
+                            <TableCell
+                                width={100}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
+                                }}
+                            >
+                                Tag
+                            </TableCell>
+                        )}
+                        {showTimerColumn && (
+                            <TableCell
+                                width={180}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
+                                }}
+                            >
+                                Time Remaining
+                            </TableCell>
+                        )}
+                        <TableCell sx={{
                             color: TEXT_COLOR,
                             fontSize: '0.8rem',
                             fontWeight: 600,
                             py: 1.5,
-                            pl: 2.5,
-                        }}
-                    >
-                        Select
-                    </TableCell>
-                    {showCallAction && (
-                        <TableCell 
-                            width={220} 
-                            sx={{ 
-                                color: TEXT_COLOR,
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                py: 1.5,
-                            }}
-                        >
-                            Call Action
+                        }}>
+                            Customer
                         </TableCell>
-                    )}
-                    {showTagAction && (
-                        <TableCell 
-                            width={100} 
-                            sx={{ 
-                                color: TEXT_COLOR,
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                py: 1.5,
-                            }}
-                        >
-                            Tag
+                        <TableCell sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            py: 1.5,
+                        }}>
+                            Address
                         </TableCell>
-                    )}
-                    {showTimerColumn && (
-                        <TableCell 
-                            width={180} 
-                            sx={{ 
-                                color: TEXT_COLOR,
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                py: 1.5,
-                            }}
-                        >
-                            Time Remaining
+                        <TableCell sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            py: 1.5,
+                        }}>
+                            Date
                         </TableCell>
-                    )}
-                    <TableCell sx={{ 
-                        color: TEXT_COLOR,
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        py: 1.5,
-                    }}>
-                        Customer
-                    </TableCell>
-                    <TableCell sx={{ 
-                        color: TEXT_COLOR,
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        py: 1.5,
-                    }}>
-                        Address
-                    </TableCell>
-                    <TableCell sx={{ 
-                        color: TEXT_COLOR,
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        py: 1.5,
-                    }}>
-                        Date
-                    </TableCell>
-                    <TableCell sx={{ 
-                        color: TEXT_COLOR,
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        py: 1.5,
-                    }}>
-                        Technician
-                    </TableCell>
-                    {showCalledBy && (
-                        <TableCell 
-                            width={200} 
-                            sx={{ 
-                                color: TEXT_COLOR,
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                py: 1.5,
-                            }}
-                        >
-                            Called By
+                        <TableCell sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            py: 1.5,
+                        }}>
+                            Technician
                         </TableCell>
-                    )}
-                    {showTaggedBy && (
-                        <TableCell 
-                            width={200} 
-                            sx={{ 
-                                color: TEXT_COLOR,
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                py: 1.5,
-                                pr: 2.5,
-                            }}
-                        >
-                            Tagged By
-                        </TableCell>
-                    )}
-                </TableRow>
-            </TableHead>
-            <TableBody>
-                {items.length === 0 ? (
-                    <TableRow>
-                        <TableCell colSpan={
-                            1 + // Select
-                            (showCallAction ? 1 : 0) +
-                            (showTagAction ? 1 : 0) +
-                            (showTimerColumn ? 1 : 0) +
-                            4 + // Customer, Address, Date, Technician
-                            (showCalledBy ? 1 : 0) +
-                            (showTaggedBy ? 1 : 0)
-                        } align="center" sx={{ py: 6 }}>
-                            <Box sx={{ 
-                                display: 'flex', 
-                                flexDirection: 'column', 
-                                alignItems: 'center',
-                                gap: 1,
-                            }}>
-                                <AlertCircle size={32} color={alpha(TEXT_COLOR, 0.2)} />
-                                <Typography 
-                                    variant="body2" 
-                                    sx={{ 
-                                        color: TEXT_COLOR, 
-                                        opacity: 0.6,
-                                        fontSize: '0.85rem',
-                                        fontWeight: 500,
-                                    }}
-                                >
-                                    No records found
-                                </Typography>
-                            </Box>
-                        </TableCell>
-                    </TableRow>
-                ) : (
-                    items.map(item => {
-                        const isSelected = selected.has(item.id);
-                        const addressLine = item.street || item.original || '—';
-                        const location = [item.city, item.state, item.zip].filter(Boolean).join(', ');
-                        const hasCheckmark = item.locatesCalled && item.calledByName;
-
-                        return (
-                            <TableRow
-                                key={item.id}
-                                hover
+                        {showCalledBy && (
+                            <TableCell
+                                width={200}
                                 sx={{
-                                    bgcolor: isSelected ? alpha(color, 0.1) : 'white',
-                                    '&:hover': {
-                                        backgroundColor: alpha(color, 0.05),
-                                    },
-                                    '&:last-child td': {
-                                        borderBottom: 'none',
-                                    },
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
                                 }}
                             >
-                                <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
-                                    <Checkbox
-                                        checked={isSelected}
-                                        onChange={() => onToggleSelect(item.id)}
-                                        size="small"
-                                        sx={{ 
+                                Called By
+                            </TableCell>
+                        )}
+                        {showTaggedBy && (
+                            <TableCell
+                                width={200}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
+                                    pr: 2.5,
+                                }}
+                            >
+                                Tagged By
+                            </TableCell>
+                        )}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {items.length === 0 ? (
+                        <TableRow>
+                            <TableCell colSpan={
+                                1 + // Select
+                                (showCallAction ? 1 : 0) +
+                                (showTagAction ? 1 : 0) +
+                                (showTimerColumn ? 1 : 0) +
+                                4 + // Customer, Address, Date, Technician
+                                (showCalledBy ? 1 : 0) +
+                                (showTaggedBy ? 1 : 0)
+                            } align="center" sx={{ py: 6 }}>
+                                <Box sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                }}>
+                                    <AlertCircle size={32} color={alpha(TEXT_COLOR, 0.2)} />
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
                                             color: TEXT_COLOR,
-                                            padding: '4px',
-                                        }}
-                                    />
-                                </TableCell>
-
-                                {showCallAction && (
-                                    <TableCell sx={{ py: 1.5 }}>
-                                        {item.locatesCalled ? (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                <CheckCircle size={18} color={RED_COLOR} />
-                                                <Chip
-                                                    label={item.callType || 'Called'}
-                                                    size="small"
-                                                    sx={{
-                                                        backgroundColor: item.callType === 'EMERGENCY' 
-                                                            ? alpha(RED_COLOR, 0.1) 
-                                                            : alpha(BLUE_COLOR, 0.1),
-                                                        color: item.callType === 'EMERGENCY' ? RED_COLOR : BLUE_COLOR,
-                                                        border: `1px solid ${item.callType === 'EMERGENCY' 
-                                                            ? alpha(RED_COLOR, 0.2) 
-                                                            : alpha(BLUE_COLOR, 0.2)}`,
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 500,
-                                                        height: '22px',
-                                                        '& .MuiChip-label': {
-                                                            px: 1,
-                                                        },
-                                                    }}
-                                                />
-                                            </Box>
-                                        ) : (
-                                            <Stack direction="row" spacing={1}>
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    onClick={() => onMarkCalled(item.id, 'STANDARD')}
-                                                    startIcon={<PhoneCall size={14} />}
-                                                    sx={{ 
-                                                        textTransform: 'none',
-                                                        fontSize: '0.75rem',
-                                                        height: '30px',
-                                                        px: 1.5,
-                                                    }}
-                                                >
-                                                    Standard
-                                                </Button>
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    color="error"
-                                                    onClick={() => onMarkCalled(item.id, 'EMERGENCY')}
-                                                    startIcon={<AlertTriangle size={14} />}
-                                                    sx={{ 
-                                                        textTransform: 'none',
-                                                        fontSize: '0.75rem',
-                                                        height: '30px',
-                                                        px: 1.5,
-                                                    }}
-                                                >
-                                                    Emergency
-                                                </Button>
-                                            </Stack>
-                                        )}
-                                    </TableCell>
-                                )}
-
-                                {showTagAction && (
-                                    <TableCell sx={{ py: 1.5 }}>
-                                        {!item.manuallyTagged ? (
-                                            <Tooltip title="Tag as Locates Needed">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => onTag(item)}
-                                                    sx={{
-                                                        color: TEXT_COLOR,
-                                                        padding: '4px',
-                                                        '&:hover': { 
-                                                            backgroundColor: alpha(color, 0.1),
-                                                            color: color,
-                                                        }
-                                                    }}
-                                                >
-                                                    <Tag size={16} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        ) : (
-                                            <Tooltip title={item.tags}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <Tag size={14} color={GREEN_COLOR} />
-                                                    <Typography 
-                                                        sx={{ 
-                                                            fontSize: '0.8rem', 
-                                                            color: TEXT_COLOR,
-                                                            fontWeight: 400,
-                                                        }}
-                                                    >
-                                                        {item.tags.split(',')[0]}
-                                                    </Typography>
-                                                </Box>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                )}
-
-                                {showTimerColumn && (
-                                    <TableCell sx={{ py: 1.5 }}>
-                                        {item.timeRemainingText ? (
-                                            <Tooltip title={item.timeRemainingDetail}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Clock size={16} color={item.timeRemainingColor} />
-                                                    <Typography
-                                                        variant="body2"
-                                                        sx={{
-                                                            color: item.timeRemainingColor,
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: item.timeRemainingText === 'EXPIRED' ? 600 : 400,
-                                                            fontFamily: item.callType === 'EMERGENCY' ? 'monospace' : 'inherit'
-                                                        }}
-                                                    >
-                                                        {item.timeRemainingText}
-                                                    </Typography>
-                                                </Box>
-                                            </Tooltip>
-                                        ) : (
-                                            <Typography 
-                                                variant="body2" 
-                                                sx={{ 
-                                                    color: GRAY_COLOR, 
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: 400,
-                                                }}
-                                            >
-                                                —
-                                            </Typography>
-                                        )}
-                                    </TableCell>
-                                )}
-
-                                <TableCell sx={{ py: 1.5 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                        {hasCheckmark && (
-                                            <Tooltip title={`Called by ${item.calledByName}`}>
-                                                <CheckCircle size={16} color={RED_COLOR} />
-                                            </Tooltip>
-                                        )}
-                                        <Box>
-                                            <Typography 
-                                                variant="body2" 
-                                                sx={{ 
-                                                    color: TEXT_COLOR,
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: 500,
-                                                    mb: 0.25,
-                                                }}
-                                            >
-                                                {item.customerName}
-                                            </Typography>
-                                            <Typography 
-                                                variant="caption" 
-                                                sx={{ 
-                                                    color: GRAY_COLOR, 
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 400,
-                                                    display: 'block',
-                                                    mb: 0.5,
-                                                }}
-                                            >
-                                                WO: {item.workOrderNumber}
-                                            </Typography>
-                                            {item.priorityName && item.priorityName !== 'Standard' && (
-                                                <Chip
-                                                    label={item.priorityName}
-                                                    size="small"
-                                                    sx={{
-                                                        color: TEXT_COLOR,
-                                                        fontSize: '0.7rem',
-                                                        height: '20px',
-                                                        fontWeight: 500,
-                                                        backgroundColor: alpha(color, 0.1),
-                                                        border: `1px solid ${alpha(color, 0.2)}`,
-                                                        '& .MuiChip-label': {
-                                                            px: 1,
-                                                        },
-                                                    }}
-                                                />
-                                            )}
-                                        </Box>
-                                    </Box>
-                                </TableCell>
-
-                                <TableCell sx={{ py: 1.5 }}>
-                                    <Typography 
-                                        variant="body2" 
-                                        sx={{ 
-                                            color: TEXT_COLOR,
+                                            opacity: 0.6,
                                             fontSize: '0.85rem',
-                                            fontWeight: 400,
-                                            mb: 0.25,
+                                            fontWeight: 500,
                                         }}
                                     >
-                                        {addressLine}
+                                        No records found
                                     </Typography>
-                                    {location && (
-                                        <Typography 
-                                            variant="caption" 
-                                            sx={{ 
-                                                color: GRAY_COLOR,
-                                                fontSize: '0.75rem',
-                                                fontWeight: 400,
+                                </Box>
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        items.map(item => {
+                            const isSelected = selected.has(item.id);
+                            const addressLine = item.street || item.original || '—';
+                            const location = [item.city, item.state, item.zip].filter(Boolean).join(', ');
+                            const hasCheckmark = item.locatesCalled && item.calledByName;
+
+                            return (
+                                <TableRow
+                                    key={item.id}
+                                    hover
+                                    sx={{
+                                        bgcolor: isSelected ? alpha(color, 0.1) : 'white',
+                                        '&:hover': {
+                                            backgroundColor: alpha(color, 0.05),
+                                        },
+                                        '&:last-child td': {
+                                            borderBottom: 'none',
+                                        },
+                                    }}
+                                >
+                                    <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onChange={() => onToggleSelect(item.id)}
+                                            size="small"
+                                            sx={{
+                                                color: TEXT_COLOR,
+                                                padding: '4px',
                                             }}
-                                        >
-                                            {location}
-                                        </Typography>
+                                        />
+                                    </TableCell>
+
+                                    {showCallAction && (
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            {item.locatesCalled ? (
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                    <CheckCircle size={18} color={RED_COLOR} />
+                                                    <Chip
+                                                        label={item.callType || 'Called'}
+                                                        size="small"
+                                                        sx={{
+                                                            backgroundColor: item.callType === 'EMERGENCY'
+                                                                ? alpha(RED_COLOR, 0.1)
+                                                                : alpha(BLUE_COLOR, 0.1),
+                                                            color: item.callType === 'EMERGENCY' ? RED_COLOR : BLUE_COLOR,
+                                                            border: `1px solid ${item.callType === 'EMERGENCY'
+                                                                ? alpha(RED_COLOR, 0.2)
+                                                                : alpha(BLUE_COLOR, 0.2)}`,
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 500,
+                                                            height: '22px',
+                                                            '& .MuiChip-label': {
+                                                                px: 1,
+                                                            },
+                                                        }}
+                                                    />
+                                                </Box>
+                                            ) : (
+                                                <Stack direction="row" spacing={1}>
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        onClick={() => onMarkCalled(item.id, 'STANDARD')}
+                                                        startIcon={<PhoneCall size={14} />}
+                                                        sx={{
+                                                            textTransform: 'none',
+                                                            fontSize: '0.75rem',
+                                                            height: '30px',
+                                                            px: 1.5,
+                                                        }}
+                                                    >
+                                                        Standard
+                                                    </Button>
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="error"
+                                                        onClick={() => onMarkCalled(item.id, 'EMERGENCY')}
+                                                        startIcon={<AlertTriangle size={14} />}
+                                                        sx={{
+                                                            textTransform: 'none',
+                                                            fontSize: '0.75rem',
+                                                            height: '30px',
+                                                            px: 1.5,
+                                                        }}
+                                                    >
+                                                        Emergency
+                                                    </Button>
+                                                </Stack>
+                                            )}
+                                        </TableCell>
                                     )}
-                                </TableCell>
 
-                                <TableCell sx={{ py: 1.5 }}>
-                                    <Stack spacing={0.5}>
-                                        <Typography 
-                                            variant="caption" 
-                                            sx={{ 
-                                                color: GRAY_COLOR,
-                                                fontSize: '0.75rem',
-                                                fontWeight: 400,
-                                            }}
-                                        >
-                                            Requested: {formatDate(item.requestedDate)}
-                                        </Typography>
-                                        {item.calledAt && (
-                                            <Typography 
-                                                variant="caption" 
-                                                sx={{ 
-                                                    color: BLUE_COLOR,
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 500,
-                                                }}
-                                            >
-                                                Called: {formatDate(item.calledAt)}
-                                            </Typography>
-                                        )}
-                                        {item.completionDate && (
-                                            <Typography 
-                                                variant="caption" 
-                                                sx={{ 
-                                                    color: GRAY_COLOR,
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 400,
-                                                }}
-                                            >
-                                                Due: {formatDate(item.completionDate)}
-                                            </Typography>
-                                        )}
-                                    </Stack>
-                                </TableCell>
+                                    {showTagAction && (
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            {!item.manuallyTagged ? (
+                                                <Tooltip title="Tag as Locates Needed">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => onTag(item)}
+                                                        sx={{
+                                                            color: TEXT_COLOR,
+                                                            padding: '4px',
+                                                            '&:hover': {
+                                                                backgroundColor: alpha(color, 0.1),
+                                                                color: color,
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Tag size={16} />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            ) : (
+                                                <Tooltip title={item.tags}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                        <Tag size={14} color={GREEN_COLOR} />
+                                                        <Typography
+                                                            sx={{
+                                                                fontSize: '0.8rem',
+                                                                color: TEXT_COLOR,
+                                                                fontWeight: 400,
+                                                            }}
+                                                        >
+                                                            {item.tags.split(',')[0]}
+                                                        </Typography>
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                    )}
 
-                                <TableCell sx={{ py: 1.5 }}>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Avatar sx={{ 
-                                            width: 28, 
-                                            height: 28, 
-                                            bgcolor: color, 
-                                            fontSize: '0.85rem',
-                                            fontWeight: 600,
-                                        }}>
-                                            {item.techName?.charAt(0) || '?'}
-                                        </Avatar>
-                                        <Typography 
-                                            variant="body2" 
-                                            sx={{ 
+                                    {showTimerColumn && (
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            {item.timeRemainingText ? (
+                                                <Tooltip title={item.timeRemainingDetail}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <Clock size={16} color={item.timeRemainingColor} />
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                color: item.timeRemainingColor,
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: item.timeRemainingText === 'EXPIRED' ? 600 : 400,
+                                                                fontFamily: item.callType === 'EMERGENCY' ? 'monospace' : 'inherit'
+                                                            }}
+                                                        >
+                                                            {item.timeRemainingText}
+                                                        </Typography>
+                                                    </Box>
+                                                </Tooltip>
+                                            ) : (
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: 400,
+                                                    }}
+                                                >
+                                                    —
+                                                </Typography>
+                                            )}
+                                        </TableCell>
+                                    )}
+
+                                    <TableCell sx={{ py: 1.5 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                            {hasCheckmark && (
+                                                <Tooltip title={`Called by ${item.calledByName}`}>
+                                                    <CheckCircle size={16} color={RED_COLOR} />
+                                                </Tooltip>
+                                            )}
+                                            <Box>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: TEXT_COLOR,
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: 500,
+                                                        mb: 0.25,
+                                                    }}
+                                                >
+                                                    {item.customerName}
+                                                </Typography>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 400,
+                                                        display: 'block',
+                                                        mb: 0.5,
+                                                    }}
+                                                >
+                                                    WO: {item.workOrderNumber}
+                                                </Typography>
+                                                {item.priorityName && item.priorityName !== 'Standard' && (
+                                                    <Chip
+                                                        label={item.priorityName}
+                                                        size="small"
+                                                        sx={{
+                                                            color: TEXT_COLOR,
+                                                            fontSize: '0.7rem',
+                                                            height: '20px',
+                                                            fontWeight: 500,
+                                                            backgroundColor: alpha(color, 0.1),
+                                                            border: `1px solid ${alpha(color, 0.2)}`,
+                                                            '& .MuiChip-label': {
+                                                                px: 1,
+                                                            },
+                                                        }}
+                                                    />
+                                                )}
+                                            </Box>
+                                        </Box>
+                                    </TableCell>
+
+                                    <TableCell sx={{ py: 1.5 }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
                                                 color: TEXT_COLOR,
                                                 fontSize: '0.85rem',
                                                 fontWeight: 400,
+                                                mb: 0.25,
                                             }}
                                         >
-                                            {item.techName}
+                                            {addressLine}
                                         </Typography>
-                                    </Stack>
-                                </TableCell>
+                                        {location && (
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: GRAY_COLOR,
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 400,
+                                                }}
+                                            >
+                                                {location}
+                                            </Typography>
+                                        )}
+                                    </TableCell>
 
-                                {showCalledBy && (
                                     <TableCell sx={{ py: 1.5 }}>
-                                        {item.calledByName ? (
-                                            <Box>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <User size={14} color={TEXT_COLOR} />
-                                                    <Typography 
-                                                        variant="body2" 
-                                                        sx={{ 
-                                                            color: TEXT_COLOR,
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: 500,
-                                                        }}
-                                                    >
-                                                        {item.calledByName}
-                                                    </Typography>
-                                                </Box>
-                                                {item.calledByEmail && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                                        <Mail size={12} color={GRAY_COLOR} />
-                                                        <Typography 
-                                                            variant="caption" 
-                                                            sx={{ 
-                                                                color: GRAY_COLOR,
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 400,
-                                                            }}
-                                                        >
-                                                            {item.calledByEmail}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                            </Box>
-                                        ) : (
-                                            <Typography 
-                                                variant="body2" 
-                                                sx={{ 
+                                        <Stack spacing={0.5}>
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
                                                     color: GRAY_COLOR,
-                                                    fontSize: '0.85rem',
+                                                    fontSize: '0.75rem',
                                                     fontWeight: 400,
                                                 }}
                                             >
-                                                —
+                                                Requested: {formatDate(item.requestedDate)}
                                             </Typography>
-                                        )}
+                                            {item.calledAt && (
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: BLUE_COLOR,
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 500,
+                                                    }}
+                                                >
+                                                    Called: {formatDate(item.calledAt)}
+                                                </Typography>
+                                            )}
+                                            {item.completionDate && (
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 400,
+                                                    }}
+                                                >
+                                                    Due: {formatDate(item.completionDate)}
+                                                </Typography>
+                                            )}
+                                        </Stack>
                                     </TableCell>
-                                )}
 
-                                {showTaggedBy && (
-                                    <TableCell sx={{ py: 1.5, pr: 2.5 }}>
-                                        {item.taggedByName ? (
-                                            <Box>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <User size={14} color={TEXT_COLOR} />
-                                                    <Typography 
-                                                        variant="body2" 
-                                                        sx={{ 
-                                                            color: TEXT_COLOR,
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: 500,
-                                                        }}
-                                                    >
-                                                        {item.taggedByName}
-                                                    </Typography>
-                                                </Box>
-                                                {item.taggedByEmail && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                                        <Mail size={12} color={GRAY_COLOR} />
-                                                        <Typography 
-                                                            variant="caption" 
-                                                            sx={{ 
-                                                                color: GRAY_COLOR,
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 400,
-                                                            }}
-                                                        >
-                                                            {item.taggedByEmail}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                            </Box>
-                                        ) : (
-                                            <Typography 
-                                                variant="body2" 
-                                                sx={{ 
-                                                    color: GRAY_COLOR,
+                                    <TableCell sx={{ py: 1.5 }}>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Avatar sx={{
+                                                width: 28,
+                                                height: 28,
+                                                bgcolor: color,
+                                                fontSize: '0.85rem',
+                                                fontWeight: 600,
+                                            }}>
+                                                {item.techName?.charAt(0) || '?'}
+                                            </Avatar>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: TEXT_COLOR,
                                                     fontSize: '0.85rem',
                                                     fontWeight: 400,
                                                 }}
                                             >
-                                                —
+                                                {item.techName}
                                             </Typography>
-                                        )}
+                                        </Stack>
                                     </TableCell>
-                                )}
-                            </TableRow>
-                        );
-                    })
-                )}
-            </TableBody>
-        </Table>
-    </TableContainer>
-);
+
+                                    {showCalledBy && (
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            {item.calledByName ? (
+                                                <Box>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <User size={14} color={TEXT_COLOR} />
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                color: TEXT_COLOR,
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: 500,
+                                                            }}
+                                                        >
+                                                            {item.calledByName}
+                                                        </Typography>
+                                                    </Box>
+                                                    {item.calledByEmail && (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                            <Mail size={12} color={GRAY_COLOR} />
+                                                            <Typography
+                                                                variant="caption"
+                                                                sx={{
+                                                                    color: GRAY_COLOR,
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 400,
+                                                                }}
+                                                            >
+                                                                {item.calledByEmail}
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                </Box>
+                                            ) : (
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: 400,
+                                                    }}
+                                                >
+                                                    —
+                                                </Typography>
+                                            )}
+                                        </TableCell>
+                                    )}
+
+                                    {showTaggedBy && (
+                                        <TableCell sx={{ py: 1.5, pr: 2.5 }}>
+                                            {item.taggedByName ? (
+                                                <Box>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <User size={14} color={TEXT_COLOR} />
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                color: TEXT_COLOR,
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: 500,
+                                                            }}
+                                                        >
+                                                            {item.taggedByName}
+                                                        </Typography>
+                                                    </Box>
+                                                    {item.taggedByEmail && (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                            <Mail size={12} color={GRAY_COLOR} />
+                                                            <Typography
+                                                                variant="caption"
+                                                                sx={{
+                                                                    color: GRAY_COLOR,
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 400,
+                                                                }}
+                                                            >
+                                                                {item.taggedByEmail}
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                </Box>
+                                            ) : (
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: 400,
+                                                    }}
+                                                >
+                                                    —
+                                                </Typography>
+                                            )}
+                                        </TableCell>
+                                    )}
+                                </TableRow>
+                            );
+                        })
+                    )}
+                </TableBody>
+            </Table>
+
+            {/* Pagination */}
+            {totalCount > 0 && (
+                <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    component="div"
+                    count={totalCount}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={onPageChange}
+                    onRowsPerPageChange={onRowsPerPageChange}
+                    sx={{
+                        borderTop: `1px solid ${alpha(color, 0.1)}`,
+                        '& .MuiTablePagination-toolbar': {
+                            minHeight: '52px',
+                            padding: '0 16px',
+                        },
+                        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                            fontSize: '0.8rem',
+                            color: TEXT_COLOR,
+                            fontWeight: 400,
+                        },
+                        '& .MuiTablePagination-actions': {
+                            marginLeft: '8px',
+                        },
+                        '& .MuiIconButton-root': {
+                            padding: '6px',
+                        },
+                    }}
+                />
+            )}
+        </TableContainer>
+    );
+};
 
 export default Locates;

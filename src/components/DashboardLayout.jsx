@@ -698,6 +698,155 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
   );
 };
 
+// Recursive component to render nested menu items
+const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handleNavigation, isMobile }) => {
+  const isExpandable = item.isExpandable;
+  const isExpanded = item.expanded;
+
+  const mainButton = (
+    <ListItemButton
+      onClick={item.onClick || (() => handleNavigation(item.path))}
+      sx={[
+        getActiveStyles(item.path),
+        {
+          minHeight: 40,
+          flexDirection: isDrawerOpen ? 'row' : 'column',
+          justifyContent: isDrawerOpen ? 'flex-start' : 'center',
+          alignItems: 'center',
+          gap: isDrawerOpen ? 1.25 : 0.25,
+          px: isDrawerOpen ? 2.25 : 1.25,
+          py: isDrawerOpen ? 0.5 : 0.75,
+          pl: isDrawerOpen ? 2.25 + (level * 2) : 1.25,
+          '& .MuiListItemIcon-root': {
+            minWidth: 0,
+            mr: isDrawerOpen ? 1.25 : 0,
+            justifyContent: 'center',
+          },
+          '& .MuiListItemText-root': {
+            m: 0,
+          },
+        },
+        isExpandable && {
+          pr: 1.25,
+        }
+      ]}
+    >
+      <ListItemIcon>
+        {React.cloneElement(item.icon, {
+          sx: {
+            width: 18,
+            height: 18,
+            color: 'inherit',
+          }
+        })}
+      </ListItemIcon>
+      {isDrawerOpen && (
+        <ListItemText
+          primary={
+            <Typography sx={{
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              lineHeight: 1.2,
+              color: 'inherit',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              letterSpacing: '0.01em',
+            }}>
+              {item.text}
+            </Typography>
+          }
+        />
+      )}
+      {!isDrawerOpen && (
+        <Typography sx={{
+          fontSize: '0.55rem',
+          fontWeight: 500,
+          lineHeight: 1.2,
+          mt: 0.25,
+          textAlign: 'center',
+          color: 'inherit',
+          letterSpacing: '0.01em',
+        }}>
+          {item.text.split(' ').map(word => word.charAt(0)).join('')}
+        </Typography>
+      )}
+      {isExpandable && isDrawerOpen && (
+        <ListItemIcon sx={{
+          minWidth: 0,
+          ml: 'auto',
+          color: 'inherit',
+          opacity: 0.7
+        }}>
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </ListItemIcon>
+      )}
+    </ListItemButton>
+  );
+
+  // Wrap in tooltip for collapsed state
+  const wrappedButton = isDrawerOpen || !isMobile ? (
+    mainButton
+  ) : (
+    <Tooltip
+      title={item.text}
+      placement="right"
+      arrow
+      componentsProps={{
+        tooltip: {
+          sx: {
+            backgroundColor: '#2d3748',
+            fontSize: '0.75rem',
+            padding: '3px 6px',
+            borderRadius: '3px',
+          }
+        },
+        arrow: {
+          sx: {
+            color: '#2d3748',
+          }
+        }
+      }}
+    >
+      {mainButton}
+    </Tooltip>
+  );
+
+  return (
+    <React.Fragment>
+      <ListItem
+        disablePadding
+        sx={{
+          display: 'block',
+        }}
+      >
+        {wrappedButton}
+      </ListItem>
+
+      {/* Recursively render nested sub-items */}
+      {isExpandable && isExpanded && item.subItems && isDrawerOpen && (
+        <List sx={{
+          py: 0,
+          pl: 0,
+          backgroundColor: level === 0 ? alpha('#000000', 0.1) : 'transparent'
+        }}>
+          {item.subItems.map((subItem, index) => (
+            <NestedMenuItem
+              key={subItem.text || index}
+              item={subItem}
+              level={level + 1}
+              isDrawerOpen={isDrawerOpen}
+              getActiveStyles={getActiveStyles}
+              handleNavigation={handleNavigation}
+              isMobile={isMobile}
+            />
+          ))}
+        </List>
+      )}
+    </React.Fragment>
+  );
+};
+
 export default function DashboardLayout({ children, title, menuItems }) {
   const theme = useTheme();
   const { user, logout } = useAuth();
@@ -846,9 +995,11 @@ export default function DashboardLayout({ children, title, menuItems }) {
   };
 
   const handleNavigation = (path) => {
-    navigate(path);
-    if (isMobile) {
-      setOpen(false);
+    if (path) {
+      navigate(path);
+      if (isMobile) {
+        setOpen(false);
+      }
     }
   };
 
@@ -959,195 +1110,17 @@ export default function DashboardLayout({ children, title, menuItems }) {
 
             {/* Section Items */}
             <List sx={{ py: 0.25 }}>
-              {section.items.map((item) => {
-                const isExpandable = item.isExpandable;
-                const isExpanded = item.expanded;
-
-                const mainButton = (
-                  <ListItemButton
-                    onClick={item.onClick}
-                    sx={[
-                      getActiveStyles(item.path),
-                      {
-                        minHeight: 40,
-                        flexDirection: open ? 'row' : 'column',
-                        justifyContent: open ? 'flex-start' : 'center',
-                        alignItems: 'center',
-                        gap: open ? 1.25 : 0.25,
-                        px: open ? 2.25 : 1.25,
-                        py: open ? 0.5 : 0.75,
-                        '& .MuiListItemIcon-root': {
-                          minWidth: 0,
-                          mr: open ? 1.25 : 0,
-                          justifyContent: 'center',
-                        },
-                        '& .MuiListItemText-root': {
-                          m: 0,
-                        },
-                      },
-                      isExpandable && {
-                        pr: 1.25,
-                      }
-                    ]}
-                  >
-                    <ListItemIcon>
-                      {React.cloneElement(item.icon, {
-                        sx: {
-                          width: 18,
-                          height: 18,
-                          color: 'inherit',
-                        }
-                      })}
-                    </ListItemIcon>
-                    {open && (
-                      <ListItemText
-                        primary={
-                          <Typography sx={{
-                            fontSize: '0.8rem',
-                            fontWeight: 500,
-                            lineHeight: 1.2,
-                            color: 'inherit',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            letterSpacing: '0.01em',
-                          }}>
-                            {item.text}
-                          </Typography>
-                        }
-                      />
-                    )}
-                    {!open && (
-                      <Typography sx={{
-                        fontSize: '0.55rem',
-                        fontWeight: 500,
-                        lineHeight: 1.2,
-                        mt: 0.25,
-                        textAlign: 'center',
-                        color: 'inherit',
-                        letterSpacing: '0.01em',
-                      }}>
-                        {item.text.split(' ').map(word => word.charAt(0)).join('')}
-                      </Typography>
-                    )}
-                    {isExpandable && open && (
-                      <ListItemIcon sx={{
-                        minWidth: 0,
-                        ml: 'auto',
-                        color: 'inherit',
-                        opacity: 0.7
-                      }}>
-                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </ListItemIcon>
-                    )}
-                  </ListItemButton>
-                );
-
-                // Wrap in tooltip for collapsed state
-                const wrappedButton = open || !isMobile ? (
-                  mainButton
-                ) : (
-                  <Tooltip
-                    title={item.text}
-                    placement="right"
-                    arrow
-                    componentsProps={{
-                      tooltip: {
-                        sx: {
-                          backgroundColor: '#2d3748',
-                          fontSize: '0.75rem',
-                          padding: '3px 6px',
-                          borderRadius: '3px',
-                        }
-                      },
-                      arrow: {
-                        sx: {
-                          color: '#2d3748',
-                        }
-                      }
-                    }}
-                  >
-                    {mainButton}
-                  </Tooltip>
-                );
-
-                return (
-                  <React.Fragment key={item.text}>
-                    <ListItem
-                      disablePadding
-                      sx={{
-                        display: 'block',
-                      }}
-                    >
-                      {wrappedButton}
-                    </ListItem>
-
-                    {/* Sub-items */}
-                    {isExpandable && isExpanded && item.subItems && open && (
-                      <List sx={{
-                        py: 0,
-                        pl: 3,
-                        backgroundColor: alpha('#000000', 0.1)
-                      }}>
-                        {item.subItems.map((subItem) => (
-                          <ListItem
-                            key={subItem.text}
-                            disablePadding
-                            sx={{
-                              display: 'block',
-                            }}
-                          >
-                            <ListItemButton
-                              onClick={subItem.onClick}
-                              sx={[
-                                getActiveStyles(subItem.path),
-                                {
-                                  minHeight: 36,
-                                  px: 2,
-                                  py: 0.25,
-                                  ml: 1,
-                                  '&:hover': {
-                                    backgroundColor: alpha('#ffffff', 0.1),
-                                  },
-                                  '& .MuiTypography-root': {
-                                    fontSize: '0.75rem',
-                                  }
-                                }
-                              ]}
-                            >
-                              {subItem.icon && (
-                                <ListItemIcon sx={{
-                                  minWidth: 28,
-                                  color: 'inherit',
-                                  opacity: 0.8
-                                }}>
-                                  {React.cloneElement(subItem.icon, {
-                                    sx: { width: 16, height: 16 }
-                                  })}
-                                </ListItemIcon>
-                              )}
-                              <ListItemText
-                                primary={
-                                  <Typography sx={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: 400,
-                                    color: 'inherit',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                  }}>
-                                    {subItem.text}
-                                  </Typography>
-                                }
-                              />
-                            </ListItemButton>
-                          </ListItem>
-                        ))}
-                      </List>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+              {section.items.map((item, index) => (
+                <NestedMenuItem
+                  key={item.text || index}
+                  item={item}
+                  level={0}
+                  isDrawerOpen={open}
+                  getActiveStyles={getActiveStyles}
+                  handleNavigation={handleNavigation}
+                  isMobile={isMobile}
+                />
+              ))}
             </List>
           </React.Fragment>
         ))}

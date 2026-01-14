@@ -206,11 +206,6 @@ export const SuperAdminMenuComponent = ({ onMenuItemClick }) => {
                     sectionId: 'reports-subsection',
                     subItems: [
                         {
-                            text: 'System Reports',
-                            icon: <Database size={16} />,
-                            path: '/superadmin-dashboard/system-reports',
-                        },
-                        {
                             text: 'Health Dept Reports',
                             icon: <AlertTriangle size={16} />,
                             isExpandable: true,
@@ -243,16 +238,6 @@ export const SuperAdminMenuComponent = ({ onMenuItemClick }) => {
                             icon: <Award size={16} />,
                             path: '/superadmin-dashboard/scorecards',
                         },
-                        {
-                            text: 'Audit Logs',
-                            icon: <History size={16} />,
-                            path: '/superadmin-dashboard/audit-logs',
-                        },
-                        {
-                            text: 'Activity History',
-                            icon: <ClipboardList size={16} />,
-                            path: '/superadmin-dashboard/activity-history',
-                        },
                     ],
                 },
                 {
@@ -277,17 +262,7 @@ export const SuperAdminMenuComponent = ({ onMenuItemClick }) => {
                             path: '/superadmin-dashboard/approvals',
                         },
                     ],
-                },
-                {
-                    text: 'Company Notifications',
-                    icon: <Bell size={18} />,
-                    path: '/superadmin-dashboard/company-notifications',
-                },
-                {
-                    text: 'Reminders',
-                    icon: <BellRing size={18} />,
-                    path: '/superadmin-dashboard/reminders',
-                },
+                }
             ],
         },
 

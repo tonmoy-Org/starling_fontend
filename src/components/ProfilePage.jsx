@@ -99,6 +99,7 @@ export const ProfilePage = ({ roleLabel }) => {
         retry: 1,
         staleTime: 5 * 60 * 1000,
     });
+    console.log(profile);
 
     useEffect(() => {
         if (profile) {

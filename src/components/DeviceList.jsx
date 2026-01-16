@@ -67,11 +67,11 @@ const DeviceList = ({ devices = [], title = "Active Devices", subtitle = "View a
 
     const formatDate = (date) => {
         if (!date) return 'Unknown';
-        
+
         const now = new Date();
         const lastActive = new Date(date);
         const diffInHours = Math.floor((now - lastActive) / (1000 * 60 * 60));
-        
+
         if (diffInHours < 1) {
             return 'Just now';
         } else if (diffInHours < 24) {
@@ -295,7 +295,7 @@ const DeviceList = ({ devices = [], title = "Active Devices", subtitle = "View a
                     {sortedDevices.map((device, index) => {
                         const deviceColor = getDeviceColor(device.deviceType);
                         const isCurrentDevice = index === 0; // First device is most recent/current
-                        
+
                         return (
                             <React.Fragment key={device.deviceId || device.id || index}>
                                 <ListItem
@@ -323,7 +323,7 @@ const DeviceList = ({ devices = [], title = "Active Devices", subtitle = "View a
                                                         lineHeight: 1.2,
                                                     }}
                                                 >
-                                                    {device.deviceType || 'Desktop'} 
+                                                    {device.deviceType || 'Desktop'}
                                                     {device.deviceModel && ` • ${device.deviceModel}`}
                                                 </Typography>
                                                 {isCurrentDevice && (
@@ -390,7 +390,7 @@ const DeviceList = ({ devices = [], title = "Active Devices", subtitle = "View a
                                                 {/* Last Active Info */}
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                                     <Clock size={12} color={GRAY_COLOR} />
-                                                    <Tooltip title={formatFullDate(device.lastActive || device.date)} arrow>
+                                                    <Tooltip title={formatFullDate(device.date)} arrow>
                                                         <Typography
                                                             variant="caption"
                                                             sx={{
@@ -401,7 +401,7 @@ const DeviceList = ({ devices = [], title = "Active Devices", subtitle = "View a
                                                                 cursor: 'help',
                                                             }}
                                                         >
-                                                            Last active {formatDate(device.lastActive || device.date)}
+                                                            Last active {formatDate(device.date)}
                                                         </Typography>
                                                     </Tooltip>
                                                 </Box>

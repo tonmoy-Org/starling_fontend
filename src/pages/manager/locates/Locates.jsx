@@ -83,6 +83,15 @@ const formatDateShort = (dateString) => {
     }
 };
 
+const formatDateOnly = (dateString) => {
+    if (!dateString) return '—';
+    try {
+        return format(new Date(dateString), 'MMM dd, yyyy');
+    } catch (e) {
+        return '—';
+    }
+};
+
 const formatEmergencyCountdown = (remainingMs) => {
     const hours = Math.floor(remainingMs / (1000 * 60 * 60));
     const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -139,6 +148,18 @@ const parseDashboardAddress = (fullAddress) => {
         zip,
         original: fullAddress,
     };
+};
+
+// Function to extract date from scheduled_date field
+const extractScheduledDate = (scheduledDateString) => {
+    if (!scheduledDateString) return null;
+    try {
+        // Handle format like "01/13/2026 8:00 AM - 4:30 PM"
+        const datePart = scheduledDateString.split(' ')[0];
+        return new Date(datePart);
+    } catch (e) {
+        return null;
+    }
 };
 
 const Locates = () => {
@@ -468,6 +489,10 @@ const Locates = () => {
                         }
                     }
 
+                    // Get scheduled date from scheduled_date field
+                    const scheduledDate = extractScheduledDate(wo.scheduled_date);
+                    const targetWorkDate = scheduledDate ? formatDateOnly(scheduledDate) : 'ASAP';
+
                     allWorkOrders.push({
                         id: wo.id || `ext-${wo.work_order_number || Math.random().toString(36).slice(2, 9)}`,
                         workOrderId: wo.id,
@@ -494,6 +519,12 @@ const Locates = () => {
                         timeRemainingColor,
                         workflowStatus: wo.workflow_status || 'UNKNOWN',
                         dashboardId: dashboard.id || null,
+                        // New fields for dates display
+                        locateTriggeredDate: wo.created_date || wo.requested_date || '',
+                        locateCalledInDate: wo.called_at || '',
+                        clearToDigDate: wo.completion_date || '',
+                        targetWorkDate: targetWorkDate,
+                        scheduledDateRaw: wo.scheduled_date || '',
                     });
                 });
             }
@@ -2266,7 +2297,7 @@ const LocateTable = ({
                             fontWeight: 600,
                             py: 1.5,
                         }}>
-                            Date
+                            Dates
                         </TableCell>
                         <TableCell sx={{
                             color: TEXT_COLOR,
@@ -2531,41 +2562,144 @@ const LocateTable = ({
                                     </TableCell>
 
                                     <TableCell sx={{ py: 1.5 }}>
-                                        <Stack spacing={0.5}>
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: GRAY_COLOR,
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 400,
-                                                }}
-                                            >
-                                                Requested: {formatDate(item.requestedDate)}
-                                            </Typography>
-                                            {item.calledAt && (
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: BLUE_COLOR,
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 500,
-                                                    }}
-                                                >
-                                                    Called: {formatDate(item.calledAt)}
-                                                </Typography>
-                                            )}
-                                            {item.completionDate && (
+                                        <Stack spacing={1}>
+                                            {/* 1. Locate Triggered */}
+                                            <Box>
                                                 <Typography
                                                     variant="caption"
                                                     sx={{
                                                         color: GRAY_COLOR,
-                                                        fontSize: '0.75rem',
+                                                        fontSize: '0.7rem',
                                                         fontWeight: 400,
+                                                        display: 'block',
+                                                        mb: 0,
                                                     }}
                                                 >
-                                                    Due: {formatDate(item.completionDate)}
+                                                    Locate Triggered:
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: BLUE_COLOR,
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 500,
+                                                            ml: 1,
+                                                        }}
+                                                    >
+                                                        {formatDate(item.locateTriggeredDate)}
+                                                    </Typography>
                                                 </Typography>
-                                            )}
+
+                                            </Box>
+
+                                            {/* 2. Locate Called In */}
+                                            <Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 400,
+                                                        display: 'block',
+                                                    }}
+                                                >
+                                                    Locate Called In:
+                                                    {item.locateCalledInDate ? (
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: ORANGE_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 500,
+                                                                ml: 1,
+                                                            }}
+                                                        >
+                                                            {formatDate(item.locateCalledInDate)}
+                                                        </Typography>
+                                                    ) : (
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: GRAY_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 400,
+                                                                fontStyle: 'italic',
+                                                                ml: 1,
+                                                            }}
+                                                        >
+                                                            Not called yet
+                                                        </Typography>
+                                                    )}
+                                                </Typography>
+
+                                            </Box>
+
+                                            {/* 3. Clear-to-Dig */}
+                                            <Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 400,
+                                                        display: 'block'
+                                                    }}
+                                                >
+                                                    Clear-to-Dig:
+                                                    {item.clearToDigDate ? (
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: GREEN_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 500,
+                                                                ml: 1,
+                                                            }}
+                                                        >
+                                                            {formatDate(item.clearToDigDate)}
+                                                        </Typography>
+                                                    ) : (
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: GRAY_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 400,
+                                                                fontStyle: 'italic',
+                                                                ml: 1,
+                                                            }}
+                                                        >
+                                                            Pending
+                                                        </Typography>
+                                                    )}
+                                                </Typography>
+
+                                            </Box>
+
+                                            {/* 4. Target Work Date */}
+                                            <Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: GRAY_COLOR,
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 400,
+                                                        display: 'block'
+                                                    }}
+                                                >
+                                                    Target Work Date:
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: item.targetWorkDate === 'ASAP' ? RED_COLOR : PURPLE_COLOR,
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 500,
+                                                            ml: 1,
+                                                        }}
+                                                    >
+                                                        {item.targetWorkDate}
+                                                    </Typography>
+                                                </Typography>
+                                            </Box>
                                         </Stack>
                                     </TableCell>
 

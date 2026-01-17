@@ -455,14 +455,14 @@ const Locates = () => {
                     // Handle completion date logic
                     if (wo.locates_called && wo.called_at && wo.call_type) {
                         const called = new Date(wo.called_at);
-                        
+
                         // Use the actual completion_date from API if available
                         if (wo.completion_date) {
                             completionDate = new Date(wo.completion_date);
                         } else {
                             // Calculate based on call type if no completion date
-                            completionDate = wo.call_type === 'EMERGENCY' 
-                                ? addHours(called, 4) 
+                            completionDate = wo.call_type === 'EMERGENCY'
+                                ? addHours(called, 4)
                                 : addBusinessDays(called, 2);
                         }
 
@@ -521,9 +521,9 @@ const Locates = () => {
                     const targetWorkDate = scheduledDate ? formatMonthDay(scheduledDate) : 'ASAP';
 
                     // Format completion date properly
-                    const formattedCompletionDate = wo.completion_date 
+                    const formattedCompletionDate = wo.completion_date
                         ? formatMonthDay(wo.completion_date)
-                        : completionDate 
+                        : completionDate
                             ? formatMonthDay(completionDate)
                             : '—';
 
@@ -982,7 +982,7 @@ const Locates = () => {
                     onPageChange={handleChangePagePending}
                     onRowsPerPageChange={handleChangeRowsPerPagePending}
                     markCalledMutation={markCalledMutation}
-                    showDetailedDates={false} // Simple view for Pending
+                    tableType="pending" // Added table type
                 />
             </Section>
 
@@ -1037,7 +1037,7 @@ const Locates = () => {
                     onPageChange={handleChangePageInProgress}
                     onRowsPerPageChange={handleChangeRowsPerPageInProgress}
                     completeWorkOrderManuallyMutation={completeWorkOrderManuallyMutation}
-                    showDetailedDates={false} // Simple view for In Progress
+                    tableType="inProgress" // Added table type
                 />
             </Section>
 
@@ -1061,7 +1061,7 @@ const Locates = () => {
                     rowsPerPage={rowsPerPageCompleted}
                     onPageChange={handleChangePageCompleted}
                     onRowsPerPageChange={handleChangeRowsPerPageCompleted}
-                    showDetailedDates={true} // Detailed view for Completed
+                    tableType="completed" // Added table type
                 />
             </Section>
 
@@ -2252,10 +2252,20 @@ const LocateTable = ({
     onRowsPerPageChange,
     markCalledMutation,
     completeWorkOrderManuallyMutation,
-    showDetailedDates = false, // New prop to control date display
+    tableType = 'pending', // 'pending', 'inProgress', or 'completed'
 }) => {
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
+
+    // Helper function to format date from calledAt field for progress table
+    const getCalledAtDate = (item) => {
+        if (!item.calledAt) return '—';
+        try {
+            return format(new Date(item.calledAt), 'MMM dd, yyyy HH:mm');
+        } catch (e) {
+            return '—';
+        }
+    };
 
     return (
         <TableContainer>
@@ -2603,7 +2613,7 @@ const LocateTable = ({
 
                                     <TableCell sx={{ py: 1.5 }}>
                                         <Stack spacing={0.5}>
-                                            {showDetailedDates ? (
+                                            {tableType === 'completed' ? (
                                                 // Detailed view (for Completed table)
                                                 <>
                                                     {/* 1. Locate Triggered */}
@@ -2726,7 +2736,7 @@ const LocateTable = ({
                                                                 display: 'block'
                                                             }}
                                                         >
-                                                            Work order was created: 
+                                                            Work order was created:
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
@@ -2740,7 +2750,7 @@ const LocateTable = ({
                                                             </Typography>
                                                         </Typography>
                                                     </Box>
-                                                    
+
                                                     {/* 5. Completion Date */}
                                                     <Box>
                                                         <Typography
@@ -2752,7 +2762,7 @@ const LocateTable = ({
                                                                 display: 'block'
                                                             }}
                                                         >
-                                                            Work order will commence: 
+                                                            Work order will commence:
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
@@ -2767,57 +2777,45 @@ const LocateTable = ({
                                                         </Typography>
                                                     </Box>
                                                 </>
+                                            ) : tableType === 'inProgress' ? (
+                                                // Progress table: Show only Called At date
+                                                <Box>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: GRAY_COLOR,
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: 400,
+                                                            display: 'block',
+                                                            mb: 0.5,
+                                                        }}
+                                                    >
+                                                        Locate Called:
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: ORANGE_COLOR,
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 500,
+                                                        }}
+                                                    >
+                                                        {getCalledAtDate(item)}
+                                                    </Typography>
+                                                </Box>
                                             ) : (
-                                                // Simple view (for Pending and In Progress tables)
+                                                // Pending table: Simple view
                                                 <>
-                                                    {/* Only show these 2 lines for Pending/In Progress */}
                                                     <Box>
                                                         <Typography
                                                             variant="caption"
                                                             sx={{
-                                                                color: GRAY_COLOR,
-                                                                fontSize: '0.7rem',
-                                                                fontWeight: 400,
-                                                                display: 'block'
+                                                                color: item.targetWorkDate === 'ASAP' ? RED_COLOR : PURPLE_COLOR,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 500,
                                                             }}
                                                         >
-                                                            Work order will commence: 
-                                                            <Typography
-                                                                variant="caption"
-                                                                sx={{
-                                                                    color: item.targetWorkDate === 'ASAP' ? RED_COLOR : PURPLE_COLOR,
-                                                                    fontSize: '0.75rem',
-                                                                    fontWeight: 500,
-                                                                    ml: 1,
-                                                                }}
-                                                            >
-                                                                {item.targetWorkDate}
-                                                            </Typography>
-                                                        </Typography>
-                                                    </Box>
-                                                    
-                                                    <Box>
-                                                        <Typography
-                                                            variant="caption"
-                                                            sx={{
-                                                                color: GRAY_COLOR,
-                                                                fontSize: '0.7rem',
-                                                                fontWeight: 400,
-                                                                display: 'block'
-                                                            }}
-                                                        >
-                                                            Completion Date: 
-                                                            <Typography
-                                                                variant="caption"
-                                                                sx={{
-                                                                    color: GREEN_COLOR,
-                                                                    fontSize: '0.75rem',
-                                                                    fontWeight: 500,
-                                                                    ml: 1,
-                                                                }}
-                                                            >
-                                                                {item.formattedCompletionDate}
-                                                            </Typography>
+                                                            {item.requestedDate}
                                                         </Typography>
                                                     </Box>
                                                 </>

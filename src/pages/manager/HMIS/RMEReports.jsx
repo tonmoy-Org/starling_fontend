@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -12,6 +12,7 @@ import {
     Chip,
     Snackbar,
     Alert,
+    CircularProgress,
     Avatar,
     Stack,
     Checkbox,
@@ -22,15 +23,20 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    InputAdornment,
     TablePagination,
     Modal,
     TextField,
     MenuItem,
-    Select,
     FormControl,
     InputLabel,
+    Select,
 } from '@mui/material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
+import axiosInstance from '../../../api/axios';
+import { useAuth } from '../../../auth/AuthProvider';
+
 import {
     Search,
     X,
@@ -38,31 +44,16 @@ import {
     AlertCircle,
     AlertTriangle,
     CheckCircle,
-    Clock,
     Timer,
-    CheckCheck,
-    Eye,
-    Lock,
-    Printer,
+    Clock,
     History,
-    Edit,
     FileText,
     File,
     FileSpreadsheet,
     AlertOctagon,
-    FolderOpen,
-    FolderCheck,
-    Archive,
-    Download,
-    Upload,
-    MoreVertical,
-    Filter,
-    Calendar,
-    MapPin,
-    User,
-    Shield,
-    ShieldOff,
     Save,
+    Edit,
+    RotateCcw,
 } from 'lucide-react';
 
 const TEXT_COLOR = '#0F1115';
@@ -77,7 +68,9 @@ const formatDate = (dateString) => {
     if (!dateString) return '—';
     try {
         const date = new Date(dateString);
+        // Convert to US Eastern Time
         return date.toLocaleDateString('en-US', {
+            timeZone: 'America/New_York',
             month: 'short',
             day: 'numeric',
             year: 'numeric'
@@ -87,9 +80,86 @@ const formatDate = (dateString) => {
     }
 };
 
+const formatTime = (dateString) => {
+    if (!dateString) return '—';
+    try {
+        const date = new Date(dateString);
+        // Convert to US Eastern Time
+        return date.toLocaleTimeString('en-US', {
+            timeZone: 'America/New_York',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    } catch (e) {
+        return '—';
+    }
+};
+
+const formatDateTime = (dateString) => {
+    if (!dateString) return '—';
+    try {
+        const date = new Date(dateString);
+        // Convert to US Eastern Time
+        return date.toLocaleDateString('en-US', {
+            timeZone: 'America/New_York',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    } catch (e) {
+        return '—';
+    }
+};
+
+const calculateElapsedTime = (createdDate) => {
+    if (!createdDate) return '—';
+    try {
+        const now = new Date();
+        const created = new Date(createdDate);
+        const diffMs = now - created;
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+        if (diffHours < 1) {
+            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+            return `${diffMinutes} MIN${diffMinutes !== 1 ? 'S' : ''}`;
+        } else if (diffHours < 24) {
+            return `${diffHours} HR${diffHours !== 1 ? 'S' : ''}`;
+        } else {
+            return `${diffHours} HR${diffHours !== 1 ? 'S' : ''}`;
+        }
+    } catch (e) {
+        return '—';
+    }
+};
+
+const getElapsedColor = (createdDate) => {
+    if (!createdDate) return GRAY_COLOR;
+    try {
+        const now = new Date();
+        const created = new Date(createdDate);
+        const diffMs = now - created;
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+        if (diffHours < 24) return GREEN_COLOR;
+        if (diffHours < 48) return ORANGE_COLOR;
+        return RED_COLOR;
+    } catch (e) {
+        return GRAY_COLOR;
+    }
+};
+
+const getTechnicianInitial = (technicianName) => {
+    if (!technicianName) return '?';
+    return technicianName.charAt(0).toUpperCase();
+};
+
 const RMEReports = () => {
-    const [currentTime] = useState(new Date());
-    const [currentUser] = useState({ name: 'John Manager', email: 'john@company.com' });
+    const queryClient = useQueryClient();
+    const { user: authUser } = useAuth();
 
     // State for each table's selection
     const [selectedUnverified, setSelectedUnverified] = useState(new Set());
@@ -117,427 +187,494 @@ const RMEReports = () => {
     const [pageFinalized, setPageFinalized] = useState(0);
     const [rowsPerPageFinalized, setRowsPerPageFinalized] = useState(10);
 
-    // Modals and dialogs
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
-    const [deletionSection, setDeletionSection] = useState('');
+    // Search states
+    const [searchUnverified, setSearchUnverified] = useState('');
+    const [searchHolding, setSearchHolding] = useState('');
+    const [searchFinalized, setSearchFinalized] = useState('');
 
-    const [lockDialogOpen, setLockDialogOpen] = useState(false);
-    const [selectedForLock, setSelectedForLock] = useState(new Set());
-
-    const [waitToLockDialogOpen, setWaitToLockDialogOpen] = useState(false);
-    const [selectedForWaitLock, setSelectedForWaitLock] = useState(new Set());
-    const [waitLockReason, setWaitLockReason] = useState('');
-    const [waitLockNotes, setWaitLockNotes] = useState('');
-
+    // History modal states
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [historySearch, setHistorySearch] = useState('');
     const [historyPage, setHistoryPage] = useState(0);
     const [historyRowsPerPage, setHistoryRowsPerPage] = useState(10);
     const [selectedHistoryItems, setSelectedHistoryItems] = useState(new Set());
 
-    // Search for each section
-    const [searchUnverified, setSearchUnverified] = useState('');
-    const [searchHolding, setSearchHolding] = useState('');
-    const [searchFinalized, setSearchFinalized] = useState('');
+    // Dialog states
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
+    const [deletionSection, setDeletionSection] = useState('');
 
+    const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
+    const [selectedForPermanentDeletion, setSelectedForPermanentDeletion] = useState(new Set());
+
+    const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+    const [selectedForRestore, setSelectedForRestore] = useState(new Set());
+
+    // Snackbar
     const [snackbar, setSnackbar] = useState({
         open: false,
         message: '',
         severity: 'success',
     });
 
-    // Simulated data for Unverified (Stage 1)
-    const unverifiedReports = useMemo(() => [
-        {
-            id: 'uv1',
-            date: '12/22/2025',
-            elapsedTime: '10 HOURS',
-            elapsedColor: GREEN_COLOR,
-            technician: 'Jason',
-            technicianInitial: 'J',
-            address: '123 MAIN ST - Kent WA 98032',
-            street: '123 MAIN ST',
-            city: 'Kent',
-            state: 'WA',
-            zip: '98032',
-            lastReport: true,
-            unlockedReport: false,
-            techReportSubmitted: false,
-            priority: 'Standard',
-            status: 'Unverified',
-            createdAt: '2025-12-22T08:00:00',
-            timeCompleted: '08:00 AM',
-        },
-        {
-            id: 'uv2',
-            date: '01/21/2026',
-            elapsedTime: '26 HOURS',
-            elapsedColor: ORANGE_COLOR,
-            technician: 'Josh',
-            technicianInitial: 'J',
-            address: '777 42ND AVE - Puyallup WA 98372',
-            street: '777 42ND AVE',
-            city: 'Puyallup',
-            state: 'WA',
-            zip: '98372',
-            lastReport: false,
-            unlockedReport: true,
-            techReportSubmitted: true,
-            priority: 'High',
-            status: 'Unverified',
-            createdAt: '2026-01-21T09:00:00',
-            timeCompleted: '09:00 AM',
-        },
-        {
-            id: 'uv3',
-            date: '11/15/2025',
-            elapsedTime: '50 HOURS',
-            elapsedColor: RED_COLOR,
-            technician: 'Billy',
-            technicianInitial: 'B',
-            address: '555 12TH ST - Graham WA 98338',
-            street: '555 12TH ST',
-            city: 'Graham',
-            state: 'WA',
-            zip: '98338',
-            lastReport: false,
-            unlockedReport: true,
-            techReportSubmitted: true,
-            priority: 'Emergency',
-            status: 'Unverified',
-            createdAt: '2025-11-15T10:00:00',
-            timeCompleted: '10:00 AM',
-        },
-        {
-            id: 'uv4',
-            date: '12/18/2025',
-            elapsedTime: '2 HOURS',
-            elapsedColor: GREEN_COLOR,
-            technician: 'Jason',
-            technicianInitial: 'J',
-            address: '111 44TH DR - Eatonville WA 98328',
-            street: '111 44TH DR',
-            city: 'Eatonville',
-            state: 'WA',
-            zip: '98328',
-            lastReport: true,
-            unlockedReport: false,
-            techReportSubmitted: false,
-            priority: 'Standard',
-            status: 'Unverified',
-            createdAt: '2025-12-18T11:00:00',
-            timeCompleted: '11:00 AM',
-        },
-        {
-            id: 'uv5',
-            date: '01/14/2026',
-            elapsedTime: '5 HOURS',
-            elapsedColor: GREEN_COLOR,
-            technician: 'Damon',
-            technicianInitial: 'D',
-            address: '888 OAK ST - Tacoma WA 98409',
-            street: '888 OAK ST',
-            city: 'Tacoma',
-            state: 'WA',
-            zip: '98409',
-            lastReport: true,
-            unlockedReport: false,
-            techReportSubmitted: true,
-            priority: 'Medium',
-            status: 'Unverified',
-            createdAt: '2026-01-14T08:30:00',
-            timeCompleted: '08:30 AM',
-        },
-        {
-            id: 'uv6',
-            date: '01/20/2026',
-            elapsedTime: '18 HOURS',
-            elapsedColor: GREEN_COLOR,
-            technician: 'Eric',
-            technicianInitial: 'E',
-            address: '456 PINE RD - Seattle WA 98101',
-            street: '456 PINE RD',
-            city: 'Seattle',
-            state: 'WA',
-            zip: '98101',
-            lastReport: true,
-            unlockedReport: true,
-            techReportSubmitted: true,
-            priority: 'High',
-            status: 'Unverified',
-            createdAt: '2026-01-20T14:00:00',
-            timeCompleted: '02:00 PM',
-        },
-        {
-            id: 'uv7',
-            date: '01/19/2026',
-            elapsedTime: '30 HOURS',
-            elapsedColor: ORANGE_COLOR,
-            technician: 'Cameron',
-            technicianInitial: 'C',
-            address: '789 ELM ST - Bellevue WA 98004',
-            street: '789 ELM ST',
-            city: 'Bellevue',
-            state: 'WA',
-            zip: '98004',
-            lastReport: false,
-            unlockedReport: false,
-            techReportSubmitted: false,
-            priority: 'Standard',
-            status: 'Unverified',
-            createdAt: '2026-01-19T12:30:00',
-            timeCompleted: '12:30 PM',
-        },
-    ], []);
+    // Local state for tech report checkbox changes
+    const [localTechReportChanges, setLocalTechReportChanges] = useState(new Set());
 
-    // Simulated data for Holding (Stage 2)
-    const holdingReports = useMemo(() => [
-        {
-            id: 'hld1',
-            date: '01/15/2026',
-            elapsedTime: '120 HOURS',
-            elapsedColor: RED_COLOR,
-            technician: 'Jason',
-            technicianInitial: 'J',
-            address: '999 MAPLE AVE - Renton WA 98057',
-            street: '999 MAPLE AVE',
-            city: 'Renton',
-            state: 'WA',
-            zip: '98057',
-            priorLockedReport: true,
-            unlockedReportLink: true,
-            reason: 'Additional Reports Needed',
-            notes: 'Waiting for customer verification photos',
-            status: 'Holding',
-            movedToHoldingDate: '2026-01-16T10:00:00',
-            createdBy: 'Office Manager',
+    // Fetch all work orders
+    const { data: workOrders = [], isLoading } = useQuery({
+        queryKey: ['rme-work-orders'],
+        queryFn: async () => {
+            const res = await axiosInstance.get('/work-orders-today/');
+            return Array.isArray(res.data) ? res.data : [];
         },
-        {
-            id: 'hld2',
-            date: '01/18/2026',
-            elapsedTime: '72 HOURS',
-            elapsedColor: RED_COLOR,
-            technician: 'Josh',
-            technicianInitial: 'J',
-            address: '777 42ND AVE - Puyallup WA 98372',
-            street: '777 42ND AVE',
-            city: 'Puyallup',
-            state: 'WA',
-            zip: '98372',
-            priorLockedReport: true,
-            unlockedReportLink: true,
-            reason: 'Verifying Information',
-            notes: 'Customer provided conflicting address information',
-            status: 'Holding',
-            movedToHoldingDate: '2026-01-19T09:30:00',
-            createdBy: 'Quality Control',
-        },
-        {
-            id: 'hld3',
-            date: '01/17/2026',
-            elapsedTime: '96 HOURS',
-            elapsedColor: RED_COLOR,
-            technician: 'Billy',
-            technicianInitial: 'B',
-            address: '333 BIRCH LN - Federal Way WA 98023',
-            street: '333 BIRCH LN',
-            city: 'Federal Way',
-            state: 'WA',
-            zip: '98023',
-            priorLockedReport: false,
-            unlockedReportLink: true,
-            reason: 'Pending Supervisor Review',
-            notes: 'Unusual incident report requires supervisor approval',
-            status: 'Holding',
-            movedToHoldingDate: '2026-01-18T14:15:00',
-            createdBy: 'Team Lead',
-        },
-    ], []);
+        staleTime: 30000,
+        refetchInterval: 60000,
+    });
 
-    // Simulated data for Finalized (Stage 3)
-    const finalizedReports = useMemo(() => [
-        {
-            id: 'fin1',
-            status: 'LOCKED',
-            statusColor: GREEN_COLOR,
-            date: '01/14/2026',
-            by: 'Damon',
-            byEmail: 'damon@company.com',
-            reportId: 'RME-2026-001',
-            address: '123 MAIN ST - Kent WA 98032',
-            action: 'locked',
-            actionTime: '2026-01-14T14:30:00',
-            technician: 'Jason',
-            originalDate: '12/22/2025',
+    // Fetch only deleted work orders for history
+    const { data: deletedWorkOrders = [] } = useQuery({
+        queryKey: ['rme-deleted-work-orders'],
+        queryFn: async () => {
+            const res = await axiosInstance.get('/work-orders-today/');
+            const allOrders = Array.isArray(res.data) ? res.data : [];
+            return allOrders.filter(order => order.is_deleted);
         },
-        {
-            id: 'fin2',
-            status: 'DELETED',
-            statusColor: RED_COLOR,
-            date: '01/18/2026',
-            by: 'Eric',
-            byEmail: 'eric@company.com',
-            reportId: 'RME-2026-002',
-            address: '777 42ND AVE - Puyallup WA 98372',
-            action: 'deleted',
-            actionTime: '2026-01-18T16:45:00',
-            technician: 'Josh',
-            originalDate: '01/21/2026',
-        },
-        {
-            id: 'fin3',
-            status: 'DELETED',
-            statusColor: RED_COLOR,
-            date: '04/21/2025',
-            by: 'Cameron',
-            byEmail: 'cameron@company.com',
-            reportId: 'RME-2025-045',
-            address: '555 12TH ST - Graham WA 98338',
-            action: 'deleted',
-            actionTime: '2025-04-21T11:20:00',
-            technician: 'Billy',
-            originalDate: '11/15/2025',
-        },
-        {
-            id: 'fin4',
-            status: 'LOCKED',
-            statusColor: GREEN_COLOR,
-            date: '10/22/2025',
-            by: 'Eric',
-            byEmail: 'eric@company.com',
-            reportId: 'RME-2025-089',
-            address: '111 44TH DR - Eatonville WA 98328',
-            action: 'locked',
-            actionTime: '2025-10-22T09:15:00',
-            technician: 'Jason',
-            originalDate: '12/18/2025',
-        },
-        {
-            id: 'fin5',
-            status: 'LOCKED',
-            statusColor: GREEN_COLOR,
-            date: '01/16/2026',
-            by: 'Damon',
-            byEmail: 'damon@company.com',
-            reportId: 'RME-2026-003',
-            address: '888 OAK ST - Tacoma WA 98409',
-            action: 'locked',
-            actionTime: '2026-01-16T11:20:00',
-            technician: 'Damon',
-            originalDate: '01/14/2026',
-        },
-    ], []);
+        staleTime: 30000,
+    });
 
-    // History data
-    const historyReports = useMemo(() => [
-        {
-            id: 'hist1',
-            status: 'LOCKED',
-            statusColor: GREEN_COLOR,
-            date: '01/14/2026',
-            by: 'Damon',
-            byEmail: 'damon@company.com',
-            reportId: 'RME-2026-001',
-            address: '123 MAIN ST - Kent WA 98032',
-            action: 'locked',
-            actionTime: '2026-01-14T14:30:00',
-        },
-        {
-            id: 'hist2',
-            status: 'DELETED',
-            statusColor: RED_COLOR,
-            date: '01/18/2026',
-            by: 'Eric',
-            byEmail: 'eric@company.com',
-            reportId: 'RME-2026-002',
-            address: '777 42ND AVE - Puyallup WA 98372',
-            action: 'deleted',
-            actionTime: '2026-01-18T16:45:00',
-        },
-        {
-            id: 'hist3',
-            status: 'DELETED',
-            statusColor: RED_COLOR,
-            date: '04/21/2025',
-            by: 'Cameron',
-            byEmail: 'cameron@company.com',
-            reportId: 'RME-2025-045',
-            address: '555 12TH ST - Graham WA 98338',
-            action: 'deleted',
-            actionTime: '2025-04-21T11:20:00',
-        },
-        {
-            id: 'hist4',
-            status: 'LOCKED',
-            statusColor: GREEN_COLOR,
-            date: '10/22/2025',
-            by: 'Eric',
-            byEmail: 'eric@company.com',
-            reportId: 'RME-2025-089',
-            address: '111 44TH DR - Eatonville WA 98328',
-            action: 'locked',
-            actionTime: '2025-10-22T09:15:00',
-        },
-    ], []);
+    // Initialize checkbox states from API data when workOrders change
+    useEffect(() => {
+        if (workOrders.length > 0) {
+            const newTechReportSubmitted = new Set();
+            const newWaitToLockDetails = {};
 
-    // Filter functions for each table
+            workOrders.forEach(item => {
+                if (!item.is_deleted && !item.finalized_by && !item.wait_to_lock && !item.moved_to_holding_date) {
+                    if (item.tech_report_submitted) {
+                        newTechReportSubmitted.add(item.id.toString());
+                    }
+
+                    if (item.wait_to_lock) {
+                        newWaitToLockAction.add(item.id.toString());
+                        newWaitToLockDetails[item.id.toString()] = {
+                            reason: item.reason || '',
+                            notes: item.notes || ''
+                        };
+                    }
+                }
+            });
+
+            setTechReportSubmitted(newTechReportSubmitted);
+            setLocalTechReportChanges(new Set());
+            setWaitToLockDetails(newWaitToLockDetails);
+        }
+    }, [workOrders]);
+
+    // Get current user from auth
+    const currentUser = useMemo(() => {
+        return authUser ? {
+            name: authUser.name || authUser.full_name || authUser.username || 'Unknown User',
+            email: authUser.email || authUser.email_address || 'unknown@example.com',
+            id: authUser.id || authUser.user_id || 'unknown'
+        } : {
+            name: 'Unknown User',
+            email: 'unknown@example.com',
+            id: 'unknown'
+        };
+    }, [authUser]);
+
+    // Process data for different stages
+    const processedData = useMemo(() => {
+        const unverified = [];
+        const holding = [];
+        const finalized = [];
+
+        workOrders.forEach(item => {
+            const report = {
+                id: item.id.toString(),
+                woNumber: item.wo_number || 'N/A',
+                date: formatDate(item.scheduled_date),
+                scheduledDate: item.scheduled_date,
+                elapsedTime: calculateElapsedTime(item.scheduled_date),
+                elapsedColor: getElapsedColor(item.scheduled_date),
+                technician: item.technician || 'Unassigned',
+                technicianInitial: getTechnicianInitial(item.technician),
+                address: item.full_address || 'No address',
+                street: item.full_address ? item.full_address.split(',')[0] || 'Unknown' : 'Unknown',
+                city: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[0] || 'Unknown' : 'Unknown',
+                state: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[1] || 'Unknown' : 'Unknown',
+                zip: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[2] || 'Unknown' : 'Unknown',
+                lastReport: !!item.last_report_link,
+                lastReportLink: item.last_report_link,
+                unlockedReport: !!item.unlocked_report_link,
+                unlockedReportLink: item.unlocked_report_link,
+                techReportSubmitted: item.tech_report_submitted || false,
+                waitToLock: item.wait_to_lock || false,
+                reason: item.reason || '',
+                notes: item.notes || '',
+                movedToHoldingDate: item.moved_to_holding_date,
+                isDeleted: item.is_deleted || false,
+                deletedBy: item.deleted_by,
+                deletedDate: item.deleted_date,
+                finalizedBy: item.finalized_by,
+                finalizedByEmail: item.finalized_by_email,
+                finalizedDate: item.finalized_date,
+                reportId: item.report_id,
+                createdAt: item.scheduled_date,
+                timeCompleted: formatTime(item.scheduled_date),
+                rawData: item,
+            };
+
+            // Categorize based on status and conditions
+            if (item.is_deleted) {
+                // Deleted items go to history
+            } else if (item.status === 'DELETED' && item.rme_completed) {
+                finalized.push({
+                    ...report,
+                    action: 'deleted',
+                    actionTime: item.finalized_date || item.updated_at || item.created_at,
+                    by: item.finalized_by || 'System',
+                    byEmail: item.finalized_by_email || '',
+                    status: 'DELETED',
+                    statusColor: RED_COLOR,
+                    isStatusDeleted: true,
+                });
+            } else if (item.finalized_by && item.rme_completed) {
+                finalized.push({
+                    ...report,
+                    action: 'locked',
+                    actionTime: item.finalized_date,
+                    by: item.finalized_by,
+                    byEmail: item.finalized_by_email || '',
+                    status: 'LOCKED',
+                    statusColor: GREEN_COLOR,
+                });
+            } else if (item.wait_to_lock || item.moved_to_holding_date) {
+                holding.push({
+                    ...report,
+                    priorLockedReport: !!item.last_report_link,
+                    reason: item.reason || 'Pending Review',
+                });
+            } else {
+                unverified.push(report);
+            }
+        });
+
+        return { unverified, holding, finalized };
+    }, [workOrders]);
+
+    // Filter functions for each table with search
     const filteredUnverifiedReports = useMemo(() => {
-        if (!searchUnverified) return unverifiedReports;
-        const searchLower = searchUnverified.toLowerCase();
-        return unverifiedReports.filter(report =>
-            report.technician.toLowerCase().includes(searchLower) ||
-            report.address.toLowerCase().includes(searchLower) ||
-            report.street.toLowerCase().includes(searchLower) ||
-            report.city.toLowerCase().includes(searchLower)
-        );
-    }, [unverifiedReports, searchUnverified]);
+        let filtered = processedData.unverified;
+        if (searchUnverified) {
+            const searchLower = searchUnverified.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.street?.toLowerCase().includes(searchLower) ||
+                report.city?.toLowerCase().includes(searchLower) ||
+                report.woNumber?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.unverified, searchUnverified]);
 
     const filteredHoldingReports = useMemo(() => {
-        if (!searchHolding) return holdingReports;
-        const searchLower = searchHolding.toLowerCase();
-        return holdingReports.filter(report =>
-            report.technician.toLowerCase().includes(searchLower) ||
-            report.address.toLowerCase().includes(searchLower) ||
-            report.reason.toLowerCase().includes(searchLower) ||
-            report.notes.toLowerCase().includes(searchLower)
-        );
-    }, [holdingReports, searchHolding]);
+        let filtered = processedData.holding;
+        if (searchHolding) {
+            const searchLower = searchHolding.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.reason?.toLowerCase().includes(searchLower) ||
+                report.notes?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.holding, searchHolding]);
 
     const filteredFinalizedReports = useMemo(() => {
-        if (!searchFinalized) return finalizedReports;
-        const searchLower = searchFinalized.toLowerCase();
-        return finalizedReports.filter(report =>
-            report.by.toLowerCase().includes(searchLower) ||
-            report.address.toLowerCase().includes(searchLower) ||
-            report.technician.toLowerCase().includes(searchLower) ||
-            report.status.toLowerCase().includes(searchLower)
-        );
-    }, [finalizedReports, searchFinalized]);
+        let filtered = processedData.finalized;
+        if (searchFinalized) {
+            const searchLower = searchFinalized.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.by?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.status?.toLowerCase().includes(searchLower) ||
+                report.reportId?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.finalized, searchFinalized]);
 
-    // Pagination handlers
-    const handleChangePageUnverified = (event, newPage) => {
-        setPageUnverified(newPage);
+    // Mutations
+    const bulkTechReportMutation = useMutation({
+        mutationFn: async (updates) => {
+            const promises = updates.map(({ id, techReportSubmitted }) =>
+                axiosInstance.patch(`/work-orders-today/${id}/`, {
+                    tech_report_submitted: techReportSubmitted,
+                })
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+        },
+    });
+
+    const bulkSoftDeleteMutation = useMutation({
+        mutationFn: async (items) => {
+            const promises = items.map(item =>
+                axiosInstance.patch(`/work-orders-today/${item.id}/`, {
+                    is_deleted: true,
+                    deleted_by: currentUser.name,
+                    deleted_by_email: currentUser.email,
+                    deleted_date: new Date().toISOString(),
+                })
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+            showSnackbar('Items moved to history', 'success');
+        },
+    });
+
+    const permanentDeleteMutation = useMutation({
+        mutationFn: async (id) => {
+            const response = await axiosInstance.delete(`/work-orders-today/${id}/`);
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+            showSnackbar('Item permanently deleted', 'success');
+        },
+    });
+
+    const bulkPermanentDeleteMutation = useMutation({
+        mutationFn: async (items) => {
+            const promises = items.map(item =>
+                axiosInstance.delete(`/work-orders-today/${item.id}/`)
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+            showSnackbar('Items permanently deleted', 'success');
+        },
+    });
+
+    const restoreMutation = useMutation({
+        mutationFn: async (id) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                is_deleted: false,
+                deleted_by: null,
+                deleted_by_email: null,
+                deleted_date: null,
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+            showSnackbar('Item restored successfully', 'success');
+        },
+    });
+
+    const bulkRestoreMutation = useMutation({
+        mutationFn: async (items) => {
+            const promises = items.map(item =>
+                axiosInstance.patch(`/work-orders-today/${item.id}/`, {
+                    is_deleted: false,
+                    deleted_by: null,
+                    deleted_by_email: null,
+                    deleted_date: null,
+                })
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+            showSnackbar('Items restored successfully', 'success');
+        },
+    });
+
+    const lockReportMutation = useMutation({
+        mutationFn: async ({ id, reportId }) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                finalized_by: currentUser.name,
+                finalized_by_email: currentUser.email,
+                finalized_date: new Date().toISOString(),
+                rme_completed: true,
+                report_id: reportId,
+                tech_report_submitted: true,
+                status: 'LOCKED',
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+        },
+    });
+
+    const waitToLockMutation = useMutation({
+        mutationFn: async ({ id, reason, notes }) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                wait_to_lock: true,
+                reason: reason,
+                notes: notes,
+                moved_created_by: currentUser.name,
+                moved_to_holding_date: new Date().toISOString(),
+                tech_report_submitted: true,
+                status: 'HOLDING',
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+        },
+    });
+
+    const bulkLockMutation = useMutation({
+        mutationFn: async (items) => {
+            const promises = items.map(item =>
+                axiosInstance.patch(`/work-orders-today/${item.id}/`, {
+                    finalized_by: currentUser.name,
+                    finalized_by_email: currentUser.email,
+                    finalized_date: new Date().toISOString(),
+                    rme_completed: true,
+                    report_id: `RME-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                    tech_report_submitted: true,
+                    status: 'LOCKED',
+                })
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries(['rme-work-orders']);
+        },
+    });
+
+    // Handle tech report checkbox toggle
+    const handleTechReportToggle = (id, isChecked) => {
+        const newSet = new Set(techReportSubmitted);
+        const newLocalChanges = new Set(localTechReportChanges);
+
+        if (isChecked) {
+            newSet.add(id);
+            newLocalChanges.add(id);
+            const waitToLockSet = new Set(waitToLockAction);
+            waitToLockSet.delete(id);
+            setWaitToLockAction(waitToLockSet);
+
+            const deleteSet = new Set(deleteAction);
+            deleteSet.delete(id);
+            setDeleteAction(deleteSet);
+        } else {
+            newSet.delete(id);
+            newLocalChanges.add(id);
+        }
+
+        setTechReportSubmitted(newSet);
+        setLocalTechReportChanges(newLocalChanges);
     };
 
+    const handleLockedToggle = (id) => {
+        const newSet = new Set(lockedAction);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+            const waitToLockSet = new Set(waitToLockAction);
+            waitToLockSet.delete(id);
+            setWaitToLockAction(waitToLockSet);
+
+            const deleteSet = new Set(deleteAction);
+            deleteSet.delete(id);
+            setDeleteAction(deleteSet);
+        }
+        setLockedAction(newSet);
+    };
+
+    const handleWaitToLockToggle = (id) => {
+        const newSet = new Set(waitToLockAction);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+            const newDetails = { ...waitToLockDetails };
+            delete newDetails[id];
+            setWaitToLockDetails(newDetails);
+        } else {
+            newSet.add(id);
+            const techReportSet = new Set(techReportSubmitted);
+            techReportSet.delete(id);
+            setTechReportSubmitted(techReportSet);
+
+            const lockedSet = new Set(lockedAction);
+            lockedSet.delete(id);
+            setLockedAction(lockedSet);
+
+            const deleteSet = new Set(deleteAction);
+            deleteSet.delete(id);
+            setDeleteAction(deleteSet);
+
+            setWaitToLockDetails(prev => ({
+                ...prev,
+                [id]: { reason: '', notes: '' }
+            }));
+        }
+        setWaitToLockAction(newSet);
+    };
+
+    const handleDeleteToggle = (id) => {
+        const newSet = new Set(deleteAction);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+            const techReportSet = new Set(techReportSubmitted);
+            techReportSet.delete(id);
+            setTechReportSubmitted(techReportSet);
+
+            const lockedSet = new Set(lockedAction);
+            lockedSet.delete(id);
+            setLockedAction(lockedSet);
+
+            const waitToLockSet = new Set(waitToLockAction);
+            waitToLockSet.delete(id);
+            setWaitToLockAction(waitToLockSet);
+        }
+        setDeleteAction(newSet);
+    };
+
+    // Handle wait to lock details changes
+    const handleWaitToLockReasonChange = (id, reason) => {
+        setWaitToLockDetails(prev => ({
+            ...prev,
+            [id]: { ...prev[id], reason }
+        }));
+    };
+
+    const handleWaitToLockNotesChange = (id, notes) => {
+        setWaitToLockDetails(prev => ({
+            ...prev,
+            [id]: { ...prev[id], notes }
+        }));
+    };
+
+    // Pagination handlers
+    const handleChangePageUnverified = (event, newPage) => setPageUnverified(newPage);
     const handleChangeRowsPerPageUnverified = (event) => {
         setRowsPerPageUnverified(parseInt(event.target.value, 10));
         setPageUnverified(0);
     };
 
-    const handleChangePageHolding = (event, newPage) => {
-        setPageHolding(newPage);
-    };
-
+    const handleChangePageHolding = (event, newPage) => setPageHolding(newPage);
     const handleChangeRowsPerPageHolding = (event) => {
         setRowsPerPageHolding(parseInt(event.target.value, 10));
         setPageHolding(0);
     };
 
-    const handleChangePageFinalized = (event, newPage) => {
-        setPageFinalized(newPage);
-    };
-
+    const handleChangePageFinalized = (event, newPage) => setPageFinalized(newPage);
     const handleChangeRowsPerPageFinalized = (event) => {
         setRowsPerPageFinalized(parseInt(event.target.value, 10));
         setPageFinalized(0);
@@ -577,204 +714,140 @@ const RMEReports = () => {
         }
     };
 
-    // Handle checkbox logic for stage 1
-    const handleTechReportToggle = (id) => {
-        const newSet = new Set(techReportSubmitted);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-        } else {
-            newSet.add(id);
-            // Uncheck Wait to Lock if checking Tech Report
-            const waitToLockSet = new Set(waitToLockAction);
-            waitToLockSet.delete(id);
-            setWaitToLockAction(waitToLockSet);
-
-            // Uncheck Delete if checking Tech Report
-            const deleteSet = new Set(deleteAction);
-            deleteSet.delete(id);
-            setDeleteAction(deleteSet);
-        }
-        setTechReportSubmitted(newSet);
-    };
-
-    const handleLockedToggle = (id) => {
-        const newSet = new Set(lockedAction);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-        } else {
-            newSet.add(id);
-            // Uncheck Wait to Lock if checking Locked
-            const waitToLockSet = new Set(waitToLockAction);
-            waitToLockSet.delete(id);
-            setWaitToLockAction(waitToLockSet);
-
-            // Uncheck Delete if checking Locked
-            const deleteSet = new Set(deleteAction);
-            deleteSet.delete(id);
-            setDeleteAction(deleteSet);
-        }
-        setLockedAction(newSet);
-    };
-
-    const handleWaitToLockToggle = (id) => {
-        const newSet = new Set(waitToLockAction);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-            // Clear wait to lock details when unchecking
-            const newDetails = { ...waitToLockDetails };
-            delete newDetails[id];
-            setWaitToLockDetails(newDetails);
-        } else {
-            newSet.add(id);
-            // Uncheck Tech Report if checking Wait to Lock
-            const techReportSet = new Set(techReportSubmitted);
-            techReportSet.delete(id);
-            setTechReportSubmitted(techReportSet);
-
-            // Uncheck Locked if checking Wait to Lock
-            const lockedSet = new Set(lockedAction);
-            lockedSet.delete(id);
-            setLockedAction(lockedSet);
-
-            // Uncheck Delete if checking Wait to Lock
-            const deleteSet = new Set(deleteAction);
-            deleteSet.delete(id);
-            setDeleteAction(deleteSet);
-
-            // Initialize details for this item
-            setWaitToLockDetails(prev => ({
-                ...prev,
-                [id]: { reason: '', notes: '' }
-            }));
-        }
-        setWaitToLockAction(newSet);
-    };
-
-    const handleDeleteToggle = (id) => {
-        const newSet = new Set(deleteAction);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-        } else {
-            newSet.add(id);
-            // Uncheck Tech Report if checking Delete
-            const techReportSet = new Set(techReportSubmitted);
-            techReportSet.delete(id);
-            setTechReportSubmitted(techReportSet);
-
-            // Uncheck Locked if checking Delete
-            const lockedSet = new Set(lockedAction);
-            lockedSet.delete(id);
-            setLockedAction(lockedSet);
-
-            // Uncheck Wait to Lock if checking Delete
-            const waitToLockSet = new Set(waitToLockAction);
-            waitToLockSet.delete(id);
-            setWaitToLockAction(waitToLockSet);
-        }
-        setDeleteAction(newSet);
-    };
-
-    const handleWaitToLockReasonChange = (id, reason) => {
-        setWaitToLockDetails(prev => ({
-            ...prev,
-            [id]: { ...prev[id], reason }
-        }));
-    };
-
-    const handleWaitToLockNotesChange = (id, notes) => {
-        setWaitToLockDetails(prev => ({
-            ...prev,
-            [id]: { ...prev[id], notes }
-        }));
-    };
-
     // Action handlers
-    const handleLock = (selectionSet) => {
+    const handleSoftDelete = async (selectionSet, section) => {
         if (selectionSet.size === 0) return;
-        setSelectedForLock(selectionSet);
-        setLockDialogOpen(true);
+
+        const itemsToDelete = Array.from(selectionSet).map(id => {
+            const item = processedData.unverified.find(r => r.id === id) ||
+                processedData.holding.find(r => r.id === id) ||
+                processedData.finalized.find(r => r.id === id);
+            return { id, ...item?.rawData };
+        }).filter(item => item && !item.is_deleted);
+
+        if (itemsToDelete.length === 0) {
+            showSnackbar('No valid items to delete', 'warning');
+            return;
+        }
+
+        try {
+            await bulkSoftDeleteMutation.mutateAsync(itemsToDelete);
+
+            setSelectedUnverified(new Set());
+            setSelectedHolding(new Set());
+            setSelectedFinalized(new Set());
+            setDeleteDialogOpen(false);
+            setSelectedForDeletion(new Set());
+
+        } catch (error) {
+            console.error('Delete error:', error);
+        }
     };
 
-    const handleWaitToLock = (selectionSet) => {
+    const handlePermanentDelete = async (selectionSet) => {
         if (selectionSet.size === 0) return;
-        setSelectedForWaitLock(selectionSet);
-        setWaitToLockDialogOpen(true);
+
+        const itemsToDelete = Array.from(selectionSet).map(id => {
+            const item = deletedWorkOrders.find(order => order.id.toString() === id);
+            return item;
+        }).filter(item => item && item.is_deleted);
+
+        if (itemsToDelete.length === 0) {
+            showSnackbar('No valid items to permanently delete', 'warning');
+            return;
+        }
+
+        try {
+            await bulkPermanentDeleteMutation.mutateAsync(itemsToDelete);
+            setSelectedHistoryItems(new Set());
+            setPermanentDeleteDialogOpen(false);
+            setSelectedForPermanentDeletion(new Set());
+        } catch (error) {
+            console.error('Permanent delete error:', error);
+        }
     };
 
-    const executeLock = () => {
-        console.log('Locking items:', Array.from(selectedForLock));
-        showSnackbar(`${selectedForLock.size} report(s) locked and moved to Finalized`, 'success');
-        setSelectedUnverified(new Set());
-        setLockDialogOpen(false);
-        setSelectedForLock(new Set());
+    const handleRestore = async (selectionSet) => {
+        if (selectionSet.size === 0) return;
+
+        const itemsToRestore = Array.from(selectionSet).map(id => {
+            const item = deletedWorkOrders.find(order => order.id.toString() === id);
+            return item;
+        }).filter(item => item && item.is_deleted);
+
+        if (itemsToRestore.length === 0) {
+            showSnackbar('No valid items to restore', 'warning');
+            return;
+        }
+
+        try {
+            await bulkRestoreMutation.mutateAsync(itemsToRestore);
+            setSelectedHistoryItems(new Set());
+            setRestoreDialogOpen(false);
+            setSelectedForRestore(new Set());
+        } catch (error) {
+            console.error('Restore error:', error);
+        }
     };
 
-    const executeWaitLock = () => {
-        console.log('Moving to Holding:', Array.from(selectedForWaitLock), 'Reason:', waitLockReason, 'Notes:', waitLockNotes);
-        showSnackbar(`${selectedForWaitLock.size} report(s) moved to Holding`, 'success');
-        setSelectedUnverified(new Set());
-        setWaitToLockDialogOpen(false);
-        setSelectedForWaitLock(new Set());
-        setWaitLockReason('');
-        setWaitLockNotes('');
-    };
-
-    const executeDelete = () => {
-        console.log('Deleting items:', Array.from(selectedForDeletion));
-        showSnackbar(`${selectedForDeletion.size} report(s) deleted and moved to Finalized`, 'success');
-        setSelectedUnverified(new Set());
-        setDeleteDialogOpen(false);
-        setSelectedForDeletion(new Set());
-    };
-
-    // Handle save changes for stage 1 with checkbox logic
-    const handleSaveStage1Changes = () => {
+    // Handle save changes for stage 1
+    const handleSaveStage1Changes = async () => {
         const selectedItems = unverifiedPageItems.filter(item =>
-            techReportSubmitted.has(item.id) ||
             lockedAction.has(item.id) ||
             waitToLockAction.has(item.id) ||
-            deleteAction.has(item.id)
+            deleteAction.has(item.id) ||
+            localTechReportChanges.has(item.id)
         );
 
         const actions = {
+            techReportUpdates: [],
             lockedAndCompleted: [],
             waitToLock: [],
-            deleted: [],
+            deleteUpdates: [],
             invalidCombinations: []
         };
 
         selectedItems.forEach(item => {
-            const hasTechReport = techReportSubmitted.has(item.id);
             const hasLocked = lockedAction.has(item.id);
             const hasWaitToLock = waitToLockAction.has(item.id);
             const hasDelete = deleteAction.has(item.id);
+            const hasTechReportChanged = localTechReportChanges.has(item.id);
 
-            // Check combination 1: Tech Report Submitted & Locked
-            if (hasTechReport && hasLocked && !hasWaitToLock && !hasDelete) {
-                actions.lockedAndCompleted.push({
+            // Handle Tech Report Submitted changes
+            if (hasTechReportChanged && !hasLocked && !hasWaitToLock && !hasDelete) {
+                const currentState = techReportSubmitted.has(item.id);
+                actions.techReportUpdates.push({
                     id: item.id,
-                    reportId: `RME-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-                    address: item.address,
-                    technician: item.technician,
-                    date: new Date().toLocaleDateString('en-US'),
-                    by: currentUser.name,
-                    byEmail: currentUser.email,
-                    originalDate: item.date
+                    techReportSubmitted: currentState,
+                    rawData: item.rawData,
                 });
             }
-            // Check combination 2: Tech Report Submitted & Wait to Lock
-            else if (hasTechReport && hasWaitToLock && !hasLocked && !hasDelete) {
+
+            // Check combination 1: Locked (Tech Report Submitted must be checked)
+            if (hasLocked && !hasWaitToLock && !hasDelete) {
+                if (techReportSubmitted.has(item.id)) {
+                    actions.lockedAndCompleted.push({
+                        id: item.id,
+                        reportId: `RME-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                        rawData: item.rawData,
+                    });
+                } else {
+                    actions.invalidCombinations.push({
+                        id: item.id,
+                        address: item.address,
+                        error: 'Tech Report Submitted must be checked for Locked action'
+                    });
+                }
+            }
+            // Check combination 2: Wait to Lock
+            else if (hasWaitToLock && !hasLocked && !hasDelete) {
                 const details = waitToLockDetails[item.id] || { reason: '', notes: '' };
                 if (details.reason) {
                     actions.waitToLock.push({
                         id: item.id,
-                        address: item.address,
-                        technician: item.technician,
                         reason: details.reason,
                         notes: details.notes,
-                        date: item.date,
-                        movedToHoldingDate: new Date().toISOString(),
-                        createdBy: currentUser.name
+                        rawData: item.rawData,
                     });
                 } else {
                     actions.invalidCombinations.push({
@@ -784,77 +857,153 @@ const RMEReports = () => {
                     });
                 }
             }
-            // Check combination 3: Delete
-            else if (hasDelete && !hasTechReport && !hasLocked && !hasWaitToLock) {
-                actions.deleted.push({
+            // Check combination 3: Delete - Updates status to "DELETED" with user info
+            else if (hasDelete && !hasLocked && !hasWaitToLock) {
+                actions.deleteUpdates.push({
                     id: item.id,
-                    reportId: `RME-${new Date().getFullYear()}-DEL-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-                    address: item.address,
-                    technician: item.technician,
-                    date: new Date().toLocaleDateString('en-US'),
-                    by: currentUser.name,
-                    byEmail: currentUser.email,
-                    originalDate: item.date
+                    rawData: item.rawData,
                 });
             }
             // Invalid combinations
-            else {
+            else if ((hasLocked && (hasWaitToLock || hasDelete)) ||
+                (hasWaitToLock && hasDelete)) {
                 actions.invalidCombinations.push({
                     id: item.id,
                     address: item.address,
-                    error: 'Invalid checkbox combination'
+                    error: 'Invalid checkbox combination. Please select only one action per row.'
                 });
             }
         });
 
-        console.log('Processing Stage 1 actions:', actions);
+        // Execute API calls
+        try {
+            let message = '';
 
-        // Show summary of actions
-        let message = '';
-        if (actions.lockedAndCompleted.length > 0) {
-            message += `${actions.lockedAndCompleted.length} report(s) sent to Finalized as "completed" by ${currentUser.name}. `;
-        }
-        if (actions.waitToLock.length > 0) {
-            message += `${actions.waitToLock.length} report(s) moved to Holding. `;
-        }
-        if (actions.deleted.length > 0) {
-            message += `${actions.deleted.length} report(s) sent to Finalized as "Deleted" by ${currentUser.name}. `;
-        }
-        if (actions.invalidCombinations.length > 0) {
-            message += `${actions.invalidCombinations.length} report(s) have invalid checkbox combinations.`;
-        }
+            // Process tech report updates
+            if (actions.techReportUpdates.length > 0) {
+                await bulkTechReportMutation.mutateAsync(actions.techReportUpdates);
+                message += `${actions.techReportUpdates.length} tech report status(es) updated. `;
+            }
 
-        if (message) {
-            showSnackbar(message, actions.invalidCombinations.length > 0 ? 'warning' : 'success');
-        } else {
-            showSnackbar('No changes to save', 'info');
-        }
+            // Process locked and completed
+            if (actions.lockedAndCompleted.length > 0) {
+                for (const action of actions.lockedAndCompleted) {
+                    await lockReportMutation.mutateAsync({
+                        id: action.id,
+                        reportId: action.reportId,
+                    });
+                }
+                message += `${actions.lockedAndCompleted.length} report(s) sent to Finalized as "LOCKED" by ${currentUser.name}. `;
+            }
 
-        // Clear checkboxes after processing
-        setTechReportSubmitted(new Set());
-        setLockedAction(new Set());
-        setWaitToLockAction(new Set());
-        setDeleteAction(new Set());
-        setWaitToLockDetails({});
+            // Process wait to lock
+            if (actions.waitToLock.length > 0) {
+                for (const action of actions.waitToLock) {
+                    await waitToLockMutation.mutateAsync({
+                        id: action.id,
+                        reason: action.reason,
+                        notes: action.notes,
+                    });
+                }
+                message += `${actions.waitToLock.length} report(s) moved to Holding. `;
+            }
+
+            // Process delete updates
+            if (actions.deleteUpdates.length > 0) {
+                const deletePromises = actions.deleteUpdates.map(({ id }) =>
+                    axiosInstance.patch(`/work-orders-today/${id}/`, {
+                        finalized_by: currentUser.name,
+                        finalized_by_email: currentUser.email,
+                        finalized_date: new Date().toISOString(),
+                        rme_completed: true,
+                        status: 'DELETED',
+                    })
+                );
+                await Promise.all(deletePromises);
+
+                queryClient.invalidateQueries(['rme-work-orders']);
+                message += `${actions.deleteUpdates.length} report(s) marked as "DELETED" by ${currentUser.name}. `;
+            }
+
+            // Show errors for invalid combinations
+            if (actions.invalidCombinations.length > 0) {
+                const invalidAddresses = actions.invalidCombinations.map(ic => ic.address).join(', ');
+                message += `${actions.invalidCombinations.length} report(s) have errors: ${invalidAddresses}.`;
+                showSnackbar(message, 'warning');
+            } else if (message) {
+                showSnackbar(message, 'success');
+            } else {
+                showSnackbar('No changes to save', 'info');
+            }
+
+            // Clear checkboxes and local changes after processing
+            setLockedAction(new Set());
+            setWaitToLockAction(new Set());
+            setDeleteAction(new Set());
+            setWaitToLockDetails({});
+            setLocalTechReportChanges(new Set());
+
+        } catch (error) {
+            console.error('Save changes error:', error);
+            showSnackbar('Failed to save changes', 'error');
+        }
     };
 
     // Handle save changes for stage 2
-    const handleSaveStage2Changes = () => {
-        const selectedIds = Array.from(selectedHolding);
+    const handleSaveStage2Changes = async () => {
         const lockedIds = Array.from(holdingLockedAction);
         const deleteIds = Array.from(holdingDeleteAction);
 
-        console.log('Saving Stage 2 changes:', {
-            selectedIds,
-            lockedIds,
-            deleteIds
-        });
+        const lockedItems = lockedIds.map(id => {
+            const item = holdingPageItems.find(r => r.id === id);
+            return item?.rawData;
+        }).filter(Boolean);
 
-        showSnackbar('Stage 2 changes saved successfully', 'success');
+        const deleteItems = deleteIds.map(id => {
+            const item = holdingPageItems.find(r => r.id === id);
+            return item?.rawData;
+        }).filter(Boolean);
 
-        // Clear checkboxes after processing
-        setHoldingLockedAction(new Set());
-        setHoldingDeleteAction(new Set());
+        try {
+            let message = '';
+
+            // Process locked items
+            if (lockedItems.length > 0) {
+                await bulkLockMutation.mutateAsync(lockedItems);
+                message += `${lockedItems.length} report(s) sent to Finalized as "LOCKED". `;
+            }
+
+            // Process delete items
+            if (deleteItems.length > 0) {
+                const deletePromises = deleteItems.map(item =>
+                    axiosInstance.patch(`/work-orders-today/${item.id}/`, {
+                        finalized_by: currentUser.name,
+                        finalized_by_email: currentUser.email,
+                        finalized_date: new Date().toISOString(),
+                        rme_completed: true,
+                        status: 'DELETED',
+                    })
+                );
+                await Promise.all(deletePromises);
+
+                queryClient.invalidateQueries(['rme-work-orders']);
+                message += `${deleteItems.length} report(s) marked as "DELETED" by ${currentUser.name}. `;
+            }
+
+            if (message) {
+                showSnackbar(message, 'success');
+            } else {
+                showSnackbar('No changes to save', 'info');
+            }
+
+            // Clear checkboxes after processing
+            setHoldingLockedAction(new Set());
+            setHoldingDeleteAction(new Set());
+
+        } catch (error) {
+            console.error('Save stage 2 error:', error);
+            showSnackbar('Failed to save stage 2 changes', 'error');
+        }
     };
 
     // Paginated items
@@ -873,15 +1022,30 @@ const RMEReports = () => {
         pageFinalized * rowsPerPageFinalized + rowsPerPageFinalized
     );
 
-    const historyModalPageItems = historyReports.slice(
+    const historyModalPageItems = deletedWorkOrders.slice(
         historyPage * historyRowsPerPage,
         historyPage * historyRowsPerPage + historyRowsPerPage
     );
 
+    // Loading state
+    if (isLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress
+                    sx={{
+                        color: BLUE_COLOR,
+                        width: '32px !important',
+                        height: '32px !important',
+                    }}
+                />
+            </Box>
+        );
+    }
+
     return (
-        <Box sx={{ p: 0 }}>
+        <Box>
             {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography
                         sx={{
@@ -902,64 +1066,29 @@ const RMEReports = () => {
                             fontWeight: 400,
                         }}
                     >
-                        Track RME reports through 3 stages: Unverified → Holding → Finalized. Manage workflow efficiently.
+                        Track RME reports through 3 stages: Unverified → Holding → Finalized
                     </Typography>
                 </Box>
-                <Button
-                    variant="outlined"
-                    startIcon={<History size={18} />}
-                    onClick={() => setHistoryModalOpen(true)}
-                    sx={{
-                        textTransform: 'none',
-                        fontSize: '0.9rem',
-                        fontWeight: 500,
-                        color: PURPLE_COLOR,
-                        borderColor: alpha(PURPLE_COLOR, 0.3),
-                        '&:hover': {
-                            borderColor: PURPLE_COLOR,
-                            backgroundColor: alpha(PURPLE_COLOR, 0.05),
-                        },
-                    }}
-                >
-                    History ({historyReports.length})
-                </Button>
-            </Box>
-
-            {/* Legend for checkboxes */}
-            <Box sx={{ mb: 3, p: 2, bgcolor: alpha(BLUE_COLOR, 0.05), borderRadius: '8px', border: `1px solid ${alpha(BLUE_COLOR, 0.2)}` }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: BLUE_COLOR }}>
-                    Checkbox Legend (Stage 1)
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Checkbox size="small" checked readOnly sx={{ padding: 0 }} />
-                        <Typography variant="caption" sx={{ fontWeight: 500 }}>TECH REPORT SUBMITTED</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Checkbox size="small" checked readOnly sx={{ padding: 0 }} />
-                        <Typography variant="caption" sx={{ fontWeight: 500 }}>LOCKED</Typography>
-                        <Typography variant="caption" sx={{ color: GRAY_COLOR, ml: 1 }}>
-                            → Send to Finalized as "completed" by manager
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Checkbox size="small" checked readOnly sx={{ padding: 0 }} />
-                        <Typography variant="caption" sx={{ fontWeight: 500 }}>WAIT TO LOCK</Typography>
-                        <Typography variant="caption" sx={{ color: GRAY_COLOR, ml: 1 }}>
-                            → Move to Holding with reason
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Checkbox size="small" checked readOnly sx={{ padding: 0 }} />
-                        <Typography variant="caption" sx={{ fontWeight: 500 }}>DELETE</Typography>
-                        <Typography variant="caption" sx={{ color: GRAY_COLOR, ml: 1 }}>
-                            → Send to Finalized as "Deleted"
-                        </Typography>
-                    </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<History size={16} />}
+                        onClick={() => setHistoryModalOpen(true)}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            color: PURPLE_COLOR,
+                            borderColor: alpha(PURPLE_COLOR, 0.3),
+                            '&:hover': {
+                                borderColor: PURPLE_COLOR,
+                                backgroundColor: alpha(PURPLE_COLOR, 0.05),
+                            },
+                        }}
+                    >
+                        History ({deletedWorkOrders.length})
+                    </Button>
                 </Box>
-                <Typography variant="caption" sx={{ color: RED_COLOR, mt: 1, display: 'block', fontWeight: 500 }}>
-                    Note: Only one checkbox per row can be selected (except Tech Report + Locked combination)
-                </Typography>
             </Box>
 
             {/* Stage 1: Unverified Reports */}
@@ -968,6 +1097,11 @@ const RMEReports = () => {
                 color={BLUE_COLOR}
                 count={filteredUnverifiedReports.length}
                 selectedCount={selectedUnverified.size}
+                onDelete={() => {
+                    setSelectedForDeletion(selectedUnverified);
+                    setDeletionSection('Unverified');
+                    setDeleteDialogOpen(true);
+                }}
                 icon={<FileSpreadsheet size={20} />}
                 subtitle="New reports awaiting verification"
                 additionalActions={
@@ -982,15 +1116,21 @@ const RMEReports = () => {
                             color="warning"
                             size="small"
                             onClick={handleSaveStage1Changes}
-                            startIcon={<Save size={16} />}
+                            startIcon={<Save size={14} />}
+                            disabled={
+                                lockedAction.size === 0 &&
+                                waitToLockAction.size === 0 &&
+                                deleteAction.size === 0 &&
+                                localTechReportChanges.size === 0
+                            }
                             sx={{
                                 textTransform: 'none',
-                                fontSize: '0.8rem',
-                                height: '32px',
+                                fontSize: '0.75rem',
+                                height: '30px',
                                 px: 1.5,
-                                backgroundColor: ORANGE_COLOR,
+                                bgcolor: ORANGE_COLOR,
                                 '&:hover': {
-                                    backgroundColor: alpha(ORANGE_COLOR, 0.9),
+                                    bgcolor: alpha(ORANGE_COLOR, 0.9),
                                 },
                             }}
                         >
@@ -1030,6 +1170,11 @@ const RMEReports = () => {
                 color={ORANGE_COLOR}
                 count={filteredHoldingReports.length}
                 selectedCount={selectedHolding.size}
+                onDelete={() => {
+                    setSelectedForDeletion(selectedHolding);
+                    setDeletionSection('Holding');
+                    setDeleteDialogOpen(true);
+                }}
                 icon={<AlertOctagon size={20} />}
                 subtitle="Reports on hold pending additional information"
                 additionalActions={
@@ -1044,15 +1189,16 @@ const RMEReports = () => {
                             color="warning"
                             size="small"
                             onClick={handleSaveStage2Changes}
-                            startIcon={<Save size={16} />}
+                            startIcon={<Save size={14} />}
+                            disabled={holdingLockedAction.size === 0 && holdingDeleteAction.size === 0}
                             sx={{
                                 textTransform: 'none',
-                                fontSize: '0.8rem',
-                                height: '32px',
+                                fontSize: '0.75rem',
+                                height: '30px',
                                 px: 1.5,
-                                backgroundColor: ORANGE_COLOR,
+                                bgcolor: ORANGE_COLOR,
                                 '&:hover': {
-                                    backgroundColor: alpha(ORANGE_COLOR, 0.9),
+                                    bgcolor: alpha(ORANGE_COLOR, 0.9),
                                 },
                             }}
                         >
@@ -1085,8 +1231,13 @@ const RMEReports = () => {
                 color={GREEN_COLOR}
                 count={filteredFinalizedReports.length}
                 selectedCount={selectedFinalized.size}
+                onDelete={() => {
+                    setSelectedForDeletion(selectedFinalized);
+                    setDeletionSection('Finalized');
+                    setDeleteDialogOpen(true);
+                }}
                 icon={<CheckCircle size={20} />}
-                subtitle="Completed reports - Locked or Deleted"
+                subtitle="Completed reports"
                 additionalActions={
                     <Stack direction="row" spacing={1} alignItems="center">
                         <SearchInput
@@ -1112,157 +1263,808 @@ const RMEReports = () => {
             </Section>
 
             {/* History Modal */}
-            <HistoryModal
+            <Modal
                 open={historyModalOpen}
                 onClose={() => setHistoryModalOpen(false)}
-                historySearch={historySearch}
-                setHistorySearch={setHistorySearch}
-                historyReports={historyReports}
-                filteredHistoryReports={historyReports}
-                historyPage={historyPage}
-                historyRowsPerPage={historyRowsPerPage}
-                onPageChange={(event, newPage) => setHistoryPage(newPage)}
-                onRowsPerPageChange={(event) => {
-                    setHistoryRowsPerPage(parseInt(event.target.value, 10));
-                    setHistoryPage(0);
+                aria-labelledby="history-modal"
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                 }}
-                selectedHistoryItems={selectedHistoryItems}
-                toggleHistorySelection={(id) => {
-                    setSelectedHistoryItems(prev => {
-                        const newSet = new Set(prev);
-                        if (newSet.has(id)) newSet.delete(id);
-                        else newSet.add(id);
-                        return newSet;
-                    });
-                }}
-                toggleAllHistorySelection={() => {
-                    const currentPageItems = historyModalPageItems;
-                    const allPageIds = new Set(currentPageItems.map(item => item.id));
-                    const currentSelected = new Set(selectedHistoryItems);
-                    const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
-
-                    if (allSelectedOnPage) {
-                        const newSet = new Set(currentSelected);
-                        allPageIds.forEach(id => newSet.delete(id));
-                        setSelectedHistoryItems(newSet);
-                    } else {
-                        const newSet = new Set([...currentSelected, ...allPageIds]);
-                        setSelectedHistoryItems(newSet);
-                    }
-                }}
-            />
-
-            {/* Wait to Lock Dialog */}
-            <Dialog
-                open={waitToLockDialogOpen}
-                onClose={() => setWaitToLockDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
             >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Clock size={24} color={ORANGE_COLOR} />
-                        <Typography variant="h6">Wait to Lock Reports</Typography>
+                <Box sx={{
+                    width: '95%',
+                    maxWidth: 1400,
+                    maxHeight: '90vh',
+                    bgcolor: 'white',
+                    borderRadius: '8px',
+                    boxShadow: 24,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}>
+                    <Box sx={{
+                        p: 2,
+                        borderBottom: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
+                        bgcolor: alpha(PURPLE_COLOR, 0.03),
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Box sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: alpha(PURPLE_COLOR, 0.1),
+                                color: PURPLE_COLOR,
+                            }}>
+                                <History size={20} />
+                            </Box>
+                            <Box>
+                                <Typography variant="h6" sx={{
+                                    fontSize: '1rem',
+                                    fontWeight: 600,
+                                    color: TEXT_COLOR,
+                                    mb: 0.5,
+                                }}>
+                                    History - Deleted Work Orders
+                                </Typography>
+                                <Typography variant="body2" sx={{
+                                    fontSize: '0.85rem',
+                                    color: GRAY_COLOR,
+                                }}>
+                                    {deletedWorkOrders.length} deleted item(s) • Restore or permanently delete
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <IconButton
+                                size="small"
+                                onClick={() => setHistoryModalOpen(false)}
+                                sx={{
+                                    color: GRAY_COLOR,
+                                    '&:hover': {
+                                        backgroundColor: alpha(GRAY_COLOR, 0.1),
+                                    },
+                                }}
+                            >
+                                <X size={20} />
+                            </IconButton>
+                        </Box>
                     </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 3 }}>
-                        Moving {selectedForWaitLock.size} report(s) to Holding stage.
-                    </Typography>
 
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                        <InputLabel>Reason for Holding</InputLabel>
-                        <Select
-                            value={waitLockReason}
-                            onChange={(e) => setWaitLockReason(e.target.value)}
-                            label="Reason for Holding"
-                        >
-                            <MenuItem value="Additional Reports Needed">Additional Reports Needed</MenuItem>
-                            <MenuItem value="Verifying Information">Verifying Information</MenuItem>
-                            <MenuItem value="Pending Supervisor Review">Pending Supervisor Review</MenuItem>
-                            <MenuItem value="Customer Follow-up Required">Customer Follow-up Required</MenuItem>
-                            <MenuItem value="Technical Issue">Technical Issue</MenuItem>
-                            <MenuItem value="Other">Other</MenuItem>
-                        </Select>
-                    </FormControl>
+                    <Box sx={{
+                        p: 1.5,
+                        borderBottom: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 2,
+                    }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Checkbox
+                                size="small"
+                                checked={historyModalPageItems.length > 0 && historyModalPageItems.every(item =>
+                                    selectedHistoryItems.has(item.id.toString())
+                                )}
+                                indeterminate={
+                                    historyModalPageItems.length > 0 &&
+                                    historyModalPageItems.some(item =>
+                                        selectedHistoryItems.has(item.id.toString())
+                                    ) &&
+                                    !historyModalPageItems.every(item =>
+                                        selectedHistoryItems.has(item.id.toString())
+                                    )
+                                }
+                                onChange={() => {
+                                    const allPageIds = new Set(historyModalPageItems.map(item => item.id.toString()));
+                                    const currentSelected = new Set(selectedHistoryItems);
+                                    const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
 
-                    <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        label="Additional Notes"
-                        value={waitLockNotes}
-                        onChange={(e) => setWaitLockNotes(e.target.value)}
-                        placeholder="Enter specific details about why the RME will not be locked today..."
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setWaitToLockDialogOpen(false)}>Cancel</Button>
-                    <Button
-                        variant="contained"
-                        onClick={executeWaitLock}
-                        disabled={!waitLockReason}
-                        sx={{ bgcolor: ORANGE_COLOR }}
-                    >
-                        Move to Holding
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Lock Confirmation Dialog */}
-            <Dialog
-                open={lockDialogOpen}
-                onClose={() => setLockDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Lock size={24} color={GREEN_COLOR} />
-                        <Typography variant="h6">Lock Reports</Typography>
+                                    if (allSelectedOnPage) {
+                                        const newSet = new Set(currentSelected);
+                                        allPageIds.forEach(id => newSet.delete(id));
+                                        setSelectedHistoryItems(newSet);
+                                    } else {
+                                        const newSet = new Set([...currentSelected, ...allPageIds]);
+                                        setSelectedHistoryItems(newSet);
+                                    }
+                                }}
+                                sx={{ padding: '4px' }}
+                            />
+                            <SearchInput
+                                value={historySearch}
+                                onChange={setHistorySearch}
+                                placeholder="Search deleted items..."
+                            />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<RotateCcw size={14} />}
+                                onClick={() => {
+                                    setSelectedForRestore(selectedHistoryItems);
+                                    setRestoreDialogOpen(true);
+                                }}
+                                disabled={selectedHistoryItems.size === 0}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontSize: '0.75rem',
+                                    color: GREEN_COLOR,
+                                    borderColor: alpha(GREEN_COLOR, 0.3),
+                                    '&:hover': {
+                                        borderColor: GREEN_COLOR,
+                                        backgroundColor: alpha(GREEN_COLOR, 0.05),
+                                    },
+                                }}
+                            >
+                                Restore ({selectedHistoryItems.size})
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Trash2 size={14} />}
+                                onClick={() => {
+                                    setSelectedForPermanentDeletion(selectedHistoryItems);
+                                    setPermanentDeleteDialogOpen(true);
+                                }}
+                                disabled={selectedHistoryItems.size === 0}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontSize: '0.75rem',
+                                    color: RED_COLOR,
+                                    borderColor: alpha(RED_COLOR, 0.3),
+                                    '&:hover': {
+                                        borderColor: RED_COLOR,
+                                        backgroundColor: alpha(RED_COLOR, 0.05),
+                                    },
+                                }}
+                            >
+                                Delete ({selectedHistoryItems.size})
+                            </Button>
+                        </Box>
                     </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        Are you sure you want to lock {selectedForLock.size} report(s) and move them to Finalized?
-                    </Typography>
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                        Locked reports cannot be edited until they are unlocked by a manager.
-                    </Alert>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setLockDialogOpen(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={executeLock} sx={{ bgcolor: GREEN_COLOR }}>
-                        Lock Reports
-                    </Button>
-                </DialogActions>
-            </Dialog>
 
-            {/* Delete Confirmation Dialog */}
+                    <Box sx={{ flex: 1, overflow: 'auto' }}>
+                        {deletedWorkOrders.length === 0 ? (
+                            <Box sx={{ textAlign: 'center', py: 8 }}>
+                                <History size={48} color={alpha(GRAY_COLOR, 0.3)} />
+                                <Typography variant="body2" sx={{
+                                    mt: 2,
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.9rem',
+                                }}>
+                                    No deleted work orders in history
+                                </Typography>
+                                <Typography variant="caption" sx={{
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.8rem',
+                                }}>
+                                    Deleted work orders will appear here
+                                </Typography>
+                            </Box>
+                        ) : (
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow sx={{
+                                            bgcolor: alpha(PURPLE_COLOR, 0.04),
+                                            '& th': {
+                                                borderBottom: `2px solid ${alpha(PURPLE_COLOR, 0.1)}`,
+                                                fontWeight: 600,
+                                                fontSize: '0.8rem',
+                                                color: TEXT_COLOR,
+                                                py: 1.5,
+                                            }
+                                        }}>
+                                            <TableCell padding="checkbox" width={50} />
+                                            <TableCell>Work Order</TableCell>
+                                            <TableCell>Customer Address</TableCell>
+                                            <TableCell>Technician</TableCell>
+                                            <TableCell>Deleted By</TableCell>
+                                            <TableCell>Deleted At</TableCell>
+                                            <TableCell>Scheduled Date</TableCell>
+                                            <TableCell width={150}>Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {historyModalPageItems.map((item) => {
+                                            const itemKey = item.id.toString();
+                                            const isSelected = selectedHistoryItems.has(itemKey);
+                                            const technician = item.technician || 'Unassigned';
+                                            const technicianInitial = getTechnicianInitial(technician);
+
+                                            return (
+                                                <TableRow
+                                                    key={itemKey}
+                                                    hover
+                                                    sx={{
+                                                        bgcolor: isSelected ? alpha(PURPLE_COLOR, 0.1) : 'white',
+                                                        '&:hover': {
+                                                            backgroundColor: alpha(PURPLE_COLOR, 0.05),
+                                                        },
+                                                    }}
+                                                >
+                                                    <TableCell padding="checkbox">
+                                                        <Checkbox
+                                                            size="small"
+                                                            checked={isSelected}
+                                                            onChange={() => {
+                                                                const newSet = new Set(selectedHistoryItems);
+                                                                if (newSet.has(itemKey)) newSet.delete(itemKey);
+                                                                else newSet.add(itemKey);
+                                                                setSelectedHistoryItems(newSet);
+                                                            }}
+                                                            sx={{ padding: '4px' }}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" sx={{
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: 500,
+                                                            color: TEXT_COLOR,
+                                                        }}>
+                                                            {item.wo_number || 'N/A'}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{
+                                                            fontSize: '0.75rem',
+                                                            color: GRAY_COLOR,
+                                                        }}>
+                                                            ID: {item.id}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" sx={{
+                                                            fontSize: '0.85rem',
+                                                            color: TEXT_COLOR,
+                                                            mb: 0.5,
+                                                        }}>
+                                                            {item.full_address?.split(',')[0] || '—'}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{
+                                                            fontSize: '0.75rem',
+                                                            color: GRAY_COLOR,
+                                                        }}>
+                                                            {item.full_address?.split(',')[1] || ''}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Stack direction="row" spacing={1} alignItems="center">
+                                                            <Avatar sx={{
+                                                                width: 28,
+                                                                height: 28,
+                                                                bgcolor: BLUE_COLOR,
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: 600,
+                                                            }}>
+                                                                {technicianInitial}
+                                                            </Avatar>
+                                                            <Typography variant="body2" sx={{
+                                                                fontSize: '0.85rem',
+                                                                color: TEXT_COLOR,
+                                                            }}>
+                                                                {technician}
+                                                            </Typography>
+                                                        </Stack>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Box>
+                                                            <Typography variant="body2" sx={{
+                                                                fontSize: '0.85rem',
+                                                                color: TEXT_COLOR,
+                                                            }}>
+                                                                {item.deleted_by || '—'}
+                                                            </Typography>
+                                                            {item.deleted_by_email && (
+                                                                <Typography variant="caption" sx={{
+                                                                    fontSize: '0.75rem',
+                                                                    color: GRAY_COLOR,
+                                                                }}>
+                                                                    {item.deleted_by_email}
+                                                                </Typography>
+                                                            )}
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" sx={{
+                                                            fontSize: '0.85rem',
+                                                            color: TEXT_COLOR,
+                                                        }}>
+                                                            {formatDate(item.deleted_date)}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{
+                                                            fontSize: '0.75rem',
+                                                            color: GRAY_COLOR,
+                                                        }}>
+                                                            {formatTime(item.deleted_date)}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" sx={{
+                                                            fontSize: '0.85rem',
+                                                            color: TEXT_COLOR,
+                                                        }}>
+                                                            {formatDate(item.scheduled_date)}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Stack direction="row" spacing={0.5}>
+                                                            <Tooltip title="Restore">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => {
+                                                                        setSelectedForRestore(new Set([itemKey]));
+                                                                        setRestoreDialogOpen(true);
+                                                                    }}
+                                                                    sx={{
+                                                                        color: GREEN_COLOR,
+                                                                        '&:hover': {
+                                                                            backgroundColor: alpha(GREEN_COLOR, 0.1),
+                                                                        },
+                                                                    }}
+                                                                >
+                                                                    <RotateCcw size={16} />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="Delete Permanently">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => {
+                                                                        setSelectedForPermanentDeletion(new Set([itemKey]));
+                                                                        setPermanentDeleteDialogOpen(true);
+                                                                    }}
+                                                                    sx={{
+                                                                        color: RED_COLOR,
+                                                                        '&:hover': {
+                                                                            backgroundColor: alpha(RED_COLOR, 0.1),
+                                                                        },
+                                                                    }}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </Stack>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        )}
+                    </Box>
+
+                    {deletedWorkOrders.length > 0 && (
+                        <Box sx={{
+                            borderTop: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
+                            p: 1,
+                        }}>
+                            <TablePagination
+                                rowsPerPageOptions={[5, 10, 25, 50]}
+                                component="div"
+                                count={deletedWorkOrders.length}
+                                rowsPerPage={historyRowsPerPage}
+                                page={historyPage}
+                                onPageChange={(event, newPage) => setHistoryPage(newPage)}
+                                onRowsPerPageChange={(event) => {
+                                    setHistoryRowsPerPage(parseInt(event.target.value, 10));
+                                    setHistoryPage(0);
+                                }}
+                                sx={{
+                                    '& .MuiTablePagination-toolbar': {
+                                        minHeight: '44px',
+                                    },
+                                    '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                                        fontSize: '0.8rem',
+                                    },
+                                }}
+                            />
+                        </Box>
+                    )}
+                </Box>
+            </Modal>
+
+            {/* Soft Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}
                 onClose={() => setDeleteDialogOpen(false)}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                    }
+                }}
             >
-                <DialogTitle>
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Trash2 size={24} color={RED_COLOR} />
-                        <Typography variant="h6">Delete Reports</Typography>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(ORANGE_COLOR, 0.1),
+                            color: ORANGE_COLOR,
+                        }}>
+                            <Trash2 size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Move to History
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Items can be restored from history
+                            </Typography>
+                        </Box>
                     </Box>
                 </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        Are you sure you want to delete {selectedForDeletion.size} report(s) from {deletionSection}?
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to move <strong>{selectedForDeletion.size} item(s)</strong> from the <strong>{deletionSection}</strong> section to history?
                     </Typography>
-                    <Alert severity="warning" sx={{ mt: 2 }}>
-                        Deleted reports will be moved to Finalized as "Deleted" and cannot be recovered.
-                    </Alert>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(ORANGE_COLOR, 0.05),
+                        border: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertCircle size={18} color={ORANGE_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: ORANGE_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Note
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Items moved to history can be restored later. Permanent deletion is only available in the history.
+                            </Typography>
+                        </Box>
+                    </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={executeDelete} sx={{ bgcolor: RED_COLOR }}>
-                        Delete Reports
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setDeleteDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => handleSoftDelete(selectedForDeletion, deletionSection)}
+                        variant="contained"
+                        color="warning"
+                        startIcon={<Trash2 size={16} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: ORANGE_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(ORANGE_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        Move to History
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Restore Confirmation Dialog */}
+            <Dialog
+                open={restoreDialogOpen}
+                onClose={() => setRestoreDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(GREEN_COLOR, 0.1),
+                            color: GREEN_COLOR,
+                        }}>
+                            <RotateCcw size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Restore Items
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Restore items from history
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to restore <strong>{selectedForRestore.size} item(s)</strong> from history?
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(GREEN_COLOR, 0.05),
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertCircle size={18} color={GREEN_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: GREEN_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Note
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Restored items will be moved back to the Unverified stage.
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setRestoreDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => handleRestore(selectedForRestore)}
+                        variant="contained"
+                        color="success"
+                        startIcon={<RotateCcw size={16} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: GREEN_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        Restore Items
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Permanent Delete Confirmation Dialog */}
+            <Dialog
+                open={permanentDeleteDialogOpen}
+                onClose={() => setPermanentDeleteDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(RED_COLOR, 0.1),
+                            color: RED_COLOR,
+                        }}>
+                            <Trash2 size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Permanent Delete
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Permanently delete items from history
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to permanently delete <strong>{selectedForPermanentDeletion.size} item(s)</strong> from history?
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(RED_COLOR, 0.05),
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertTriangle size={18} color={RED_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: RED_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Warning: This action cannot be undone
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Items will be permanently deleted and cannot be recovered.
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setPermanentDeleteDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => handlePermanentDelete(selectedForPermanentDeletion)}
+                        variant="contained"
+                        color="error"
+                        startIcon={<Trash2 size={16} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: RED_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(RED_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        Delete Permanently
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -1277,21 +2079,57 @@ const RMEReports = () => {
                 <Alert
                     onClose={handleCloseSnackbar}
                     severity={snackbar.severity}
-                    sx={{ width: '100%' }}
+                    iconMapping={{
+                        success: <CheckCircle size={20} />,
+                        error: <AlertCircle size={20} />,
+                        warning: <AlertTriangle size={20} />,
+                        info: <AlertCircle size={20} />,
+                    }}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '6px',
+                        backgroundColor: snackbar.severity === 'success'
+                            ? alpha(GREEN_COLOR, 0.05)
+                            : snackbar.severity === 'error'
+                                ? alpha(RED_COLOR, 0.05)
+                                : snackbar.severity === 'warning'
+                                    ? alpha(ORANGE_COLOR, 0.05)
+                                    : alpha(BLUE_COLOR, 0.05),
+                        borderLeft: `4px solid ${snackbar.severity === 'success' ? GREEN_COLOR :
+                            snackbar.severity === 'error' ? RED_COLOR :
+                                snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR}`,
+                        '& .MuiAlert-icon': {
+                            color: snackbar.severity === 'success' ? GREEN_COLOR :
+                                snackbar.severity === 'error' ? RED_COLOR :
+                                    snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR,
+                        },
+                        '& .MuiAlert-message': {
+                            py: 0.5,
+                        }
+                    }}
+                    elevation={6}
                 >
-                    {snackbar.message}
+                    <Typography
+                        sx={{
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            color: TEXT_COLOR,
+                        }}
+                    >
+                        {snackbar.message}
+                    </Typography>
                 </Alert>
             </Snackbar>
         </Box>
     );
 };
 
-// Section Component
 const Section = ({
     title,
     color,
     count,
     selectedCount,
+    onDelete,
     children,
     icon,
     subtitle,
@@ -1301,67 +2139,70 @@ const Section = ({
         elevation={0}
         sx={{
             mb: 4,
-            borderRadius: '8px',
+            borderRadius: '6px',
             overflow: 'hidden',
-            border: `1px solid ${alpha(color, 0.2)}`,
-            bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            border: `1px solid ${alpha(color, 0.15)}`,
+            bgcolor: 'white'
         }}
     >
         <Box
             sx={{
-                p: 2,
-                bgcolor: alpha(color, 0.05),
+                p: 1.5,
+                bgcolor: 'white',
                 borderBottom: `1px solid ${alpha(color, 0.1)}`,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: alpha(color, 0.1),
-                    color: color,
-                }}>
-                    {icon}
-                </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {icon && (
+                    <Box sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: alpha(color, 0.1),
+                        color: color,
+                    }}>
+                        {icon}
+                    </Box>
+                )}
                 <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography
-                            sx={{
-                                fontSize: '1rem',
-                                color: TEXT_COLOR,
-                                fontWeight: 600,
-                            }}
-                        >
-                            {title}
-                        </Typography>
+                    <Typography
+                        sx={{
+                            fontSize: '0.9rem',
+                            color: TEXT_COLOR,
+                            fontWeight: 600,
+                        }}
+                    >
+                        {title}
                         <Chip
                             size="small"
                             label={count}
                             sx={{
-                                bgcolor: alpha(color, 0.15),
-                                color: color,
+                                ml: 1,
+                                bgcolor: alpha(color, 0.08),
+                                color: TEXT_COLOR,
                                 fontSize: '0.75rem',
-                                fontWeight: 600,
+                                fontWeight: 500,
                                 height: '22px',
+                                '& .MuiChip-label': {
+                                    px: 1,
+                                },
                             }}
                         />
-                    </Box>
+                    </Typography>
                     {subtitle && (
                         <Typography
-                            variant="caption"
+                            variant="body2"
                             sx={{
                                 color: GRAY_COLOR,
-                                fontSize: '0.8rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
                                 mt: 0.25,
-                                display: 'block',
                             }}
                         >
                             {subtitle}
@@ -1371,67 +2212,68 @@ const Section = ({
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                {selectedCount > 0 && (
-                    <Typography variant="caption" sx={{ color: color, fontWeight: 500 }}>
-                        {selectedCount} selected
-                    </Typography>
-                )}
                 {additionalActions}
+                {selectedCount > 0 && onDelete && (
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        onClick={onDelete}
+                        startIcon={<Trash2 size={14} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.75rem',
+                            height: '30px',
+                            px: 1.5,
+                        }}
+                    >
+                        Move to History ({selectedCount})
+                    </Button>
+                )}
             </Box>
         </Box>
         {children}
     </Paper>
 );
 
-// Search Input Component
 const SearchInput = ({ value, onChange, placeholder }) => (
     <Box sx={{ position: 'relative', width: 200 }}>
-        <input
-            type="text"
+        <TextField
+            size="small"
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            style={{
+            sx={{
                 width: '100%',
-                padding: '8px 12px 8px 36px',
-                fontSize: '0.85rem',
-                border: `1px solid ${alpha(GRAY_COLOR, 0.3)}`,
-                borderRadius: '6px',
-                backgroundColor: 'white',
-                outline: 'none',
-                height: '36px',
-                boxSizing: 'border-box',
+                '& .MuiInputBase-root': {
+                    fontSize: '0.8rem',
+                    height: '36px',
+                    paddingLeft: '36px',
+                },
+            }}
+            InputProps={{
+                startAdornment: (
+                    <InputAdornment position="start">
+                        <Search size={16} color={GRAY_COLOR} />
+                    </InputAdornment>
+                ),
+                endAdornment: value && (
+                    <InputAdornment position="end">
+                        <IconButton
+                            size="small"
+                            onClick={() => onChange('')}
+                            edge="end"
+                            sx={{ p: 0.5 }}
+                        >
+                            <X size={16} />
+                        </IconButton>
+                    </InputAdornment>
+                ),
             }}
         />
-        <Search
-            size={16}
-            style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: GRAY_COLOR,
-            }}
-        />
-        {value && (
-            <IconButton
-                size="small"
-                onClick={() => onChange('')}
-                sx={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    padding: '4px',
-                }}
-            >
-                <X size={14} />
-            </IconButton>
-        )}
     </Box>
 );
 
-// Unverified Table Component
 const UnverifiedTable = ({
     items,
     selected,
@@ -1464,22 +2306,35 @@ const UnverifiedTable = ({
                 <Table size="small">
                     <TableHead>
                         <TableRow sx={{
-                            bgcolor: alpha(color, 0.05),
+                            bgcolor: alpha(color, 0.04),
                             '& th': {
-                                borderBottom: `2px solid ${alpha(color, 0.2)}`,
+                                borderBottom: `2px solid ${alpha(color, 0.1)}`,
                                 fontWeight: 600,
-                                fontSize: '0.85rem',
+                                fontSize: '0.8rem',
                                 color: TEXT_COLOR,
                                 py: 1.5,
                             }
                         }}>
-                            <TableCell padding="checkbox" width={50}>
+                            <TableCell
+                                padding="checkbox"
+                                width={50}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
+                                    pl: 2.5,
+                                }}
+                            >
                                 <Checkbox
                                     size="small"
                                     checked={allSelectedOnPage}
                                     indeterminate={someSelectedOnPage && !allSelectedOnPage}
                                     onChange={onToggleAll}
-                                    sx={{ padding: '6px' }}
+                                    sx={{
+                                        color: TEXT_COLOR,
+                                        padding: '4px',
+                                    }}
                                 />
                             </TableCell>
                             <TableCell>W.O Date & Elapsed Time</TableCell>
@@ -1487,20 +2342,33 @@ const UnverifiedTable = ({
                             <TableCell>Address</TableCell>
                             <TableCell align="center">Last Report</TableCell>
                             <TableCell align="center">Unlocked Report</TableCell>
-                            <TableCell align="center">TECH REPORT SUBMITTED</TableCell>
+                            <TableCell align="center">Tech Report Submitted</TableCell>
                             <TableCell align="center">LOCKED</TableCell>
-                            <TableCell align="center">WAIT TO LOCK</TableCell>
+                            <TableCell align="center">Wait To Lock</TableCell>
                             <TableCell align="center">DELETE</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {items.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                                        <FileSpreadsheet size={40} color={alpha(TEXT_COLOR, 0.2)} />
-                                        <Typography variant="body2" sx={{ color: GRAY_COLOR }}>
-                                            No unverified reports found
+                                <TableCell colSpan={11} align="center" sx={{ py: 6 }}>
+                                    <Box sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                    }}>
+                                        <FileSpreadsheet size={32} color={alpha(TEXT_COLOR, 0.2)} />
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: TEXT_COLOR,
+                                                opacity: 0.6,
+                                                fontSize: '0.85rem',
+                                                fontWeight: 500,
+                                            }}
+                                        >
+                                            No records found
                                         </Typography>
                                     </Box>
                                 </TableCell>
@@ -1519,19 +2387,27 @@ const UnverifiedTable = ({
                                         <TableRow
                                             hover
                                             sx={{
-                                                bgcolor: isSelected ? alpha(color, 0.08) : 'white',
-                                                '&:hover': { backgroundColor: alpha(color, 0.05) },
+                                                bgcolor: isSelected ? alpha(color, 0.1) : 'white',
+                                                '&:hover': {
+                                                    backgroundColor: alpha(color, 0.05),
+                                                },
+                                                '&:last-child td': {
+                                                    borderBottom: 'none',
+                                                },
                                             }}
                                         >
-                                            <TableCell padding="checkbox">
+                                            <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
                                                 <Checkbox
-                                                    size="small"
                                                     checked={isSelected}
                                                     onChange={() => onToggleSelect(item.id)}
-                                                    sx={{ padding: '6px' }}
+                                                    size="small"
+                                                    sx={{
+                                                        color: TEXT_COLOR,
+                                                        padding: '4px',
+                                                    }}
                                                 />
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell sx={{ py: 1.5 }}>
                                                 <Box>
                                                     <Typography variant="body2" sx={{ fontWeight: 500, color: TEXT_COLOR }}>
                                                         {item.date}
@@ -1548,11 +2424,11 @@ const UnverifiedTable = ({
                                                     </Typography>
                                                 </Box>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell sx={{ py: 1.5 }}>
                                                 <Stack direction="row" spacing={1} alignItems="center">
                                                     <Avatar sx={{
-                                                        width: 32,
-                                                        height: 32,
+                                                        width: 28,
+                                                        height: 28,
                                                         bgcolor: color,
                                                         fontSize: '0.85rem',
                                                         fontWeight: 600
@@ -1562,7 +2438,7 @@ const UnverifiedTable = ({
                                                     <Typography variant="body2">{item.technician}</Typography>
                                                 </Stack>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell sx={{ py: 1.5 }}>
                                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                     {item.street}
                                                 </Typography>
@@ -1570,74 +2446,106 @@ const UnverifiedTable = ({
                                                     {item.city}, {item.state} {item.zip}
                                                 </Typography>
                                             </TableCell>
-                                            <TableCell align="center">
+                                            <TableCell align="center" sx={{ py: 1.5 }}>
                                                 {item.lastReport ? (
                                                     <Tooltip title="View Last Locked Report">
-                                                        <IconButton size="small" color="primary">
-                                                            <FileText size={20} />
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => window.open(item.lastReportLink, '_blank')}
+                                                            sx={{
+                                                                color: BLUE_COLOR,
+                                                                '&:hover': {
+                                                                    backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                                                },
+                                                            }}
+                                                        >
+                                                            <FileText size={18} />
                                                         </IconButton>
                                                     </Tooltip>
                                                 ) : (
                                                     <Typography variant="caption" sx={{ color: GRAY_COLOR }}>—</Typography>
                                                 )}
                                             </TableCell>
-                                            <TableCell align="center">
+                                            <TableCell align="center" sx={{ py: 1.5 }}>
                                                 {item.unlockedReport ? (
                                                     <Tooltip title="Edit Unlocked Report">
-                                                        <IconButton size="small" color="secondary">
-                                                            <File size={20} />
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => window.open(item.unlockedReportLink, '_blank')}
+                                                            sx={{
+                                                                color: ORANGE_COLOR,
+                                                                '&:hover': {
+                                                                    backgroundColor: alpha(ORANGE_COLOR, 0.1),
+                                                                },
+                                                            }}
+                                                        >
+                                                            <File size={18} />
                                                         </IconButton>
                                                     </Tooltip>
                                                 ) : (
-                                                    <Tooltip title="No Unlocked Report">
-                                                        <Typography variant="caption" sx={{ color: GRAY_COLOR }}>—</Typography>
-                                                    </Tooltip>
+                                                    <Typography variant="caption" sx={{ color: GRAY_COLOR }}>—</Typography>
                                                 )}
                                             </TableCell>
-                                            <TableCell align="center">
-                                                <Checkbox
-                                                    size="small"
-                                                    checked={isTechReportSubmitted}
-                                                    onChange={() => onTechReportToggle(item.id)}
-                                                    disabled={isWaitToLock || isDelete}
-                                                    sx={{ padding: '6px' }}
-                                                />
+                                            <TableCell align="center" sx={{ py: 1.5 }}>
+                                                <Tooltip title="Tech Report Submitted - Updates on Save Changes">
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={isTechReportSubmitted}
+                                                        onChange={(e) => onTechReportToggle(item.id, e.target.checked)}
+                                                        disabled={isWaitToLock || isDelete}
+                                                        sx={{
+                                                            padding: '6px',
+                                                            '&.Mui-disabled': {
+                                                                opacity: 0.5,
+                                                            }
+                                                        }}
+                                                    />
+                                                </Tooltip>
                                             </TableCell>
-                                            <TableCell align="center">
-                                                <Checkbox
-                                                    size="small"
-                                                    checked={isLocked}
-                                                    onChange={() => onLockedToggle(item.id)}
-                                                    disabled={isWaitToLock || isDelete || !isTechReportSubmitted}
-                                                    sx={{ padding: '6px' }}
-                                                />
+                                            <TableCell align="center" sx={{ py: 1.5 }}>
+                                                <Tooltip title="Locked - Requires Save Changes and Tech Report Submitted must be checked">
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={isLocked}
+                                                        onChange={() => onLockedToggle(item.id)}
+                                                        disabled={isWaitToLock || isDelete}
+                                                        sx={{
+                                                            padding: '6px',
+                                                            color: isTechReportSubmitted ? 'inherit' : alpha(TEXT_COLOR, 0.3),
+                                                        }}
+                                                    />
+                                                </Tooltip>
                                             </TableCell>
-                                            <TableCell align="center">
-                                                <Checkbox
-                                                    size="small"
-                                                    checked={isWaitToLock}
-                                                    onChange={() => onWaitToLockToggle(item.id)}
-                                                    disabled={isLocked || isDelete}
-                                                    sx={{ padding: '6px' }}
-                                                />
+                                            <TableCell align="center" sx={{ py: 1.5 }}>
+                                                <Tooltip title="Wait to Lock - Requires Save Changes">
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={isWaitToLock}
+                                                        onChange={() => onWaitToLockToggle(item.id)}
+                                                        disabled={isLocked || isDelete}
+                                                        sx={{ padding: '6px' }}
+                                                    />
+                                                </Tooltip>
                                             </TableCell>
-                                            <TableCell align="center">
-                                                <Checkbox
-                                                    size="small"
-                                                    checked={isDelete}
-                                                    onChange={() => onDeleteToggle(item.id)}
-                                                    disabled={isTechReportSubmitted || isLocked || isWaitToLock}
-                                                    sx={{ padding: '6px' }}
-                                                />
+                                            <TableCell align="center" sx={{ py: 1.5 }}>
+                                                <Tooltip title="Delete - Updates status to 'DELETED' and rme_completed=true on Save Changes">
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={isDelete}
+                                                        onChange={() => onDeleteToggle(item.id)}
+                                                        disabled={isLocked || isWaitToLock}
+                                                        sx={{ padding: '6px' }}
+                                                    />
+                                                </Tooltip>
                                             </TableCell>
                                         </TableRow>
 
                                         {/* Wait to Lock Details Row */}
                                         {isWaitToLock && (
-                                            <TableRow sx={{ bgcolor: alpha('#ff9800', 0.05) }}>
-                                                <TableCell colSpan={10} sx={{ p: 2 }}>
+                                            <TableRow sx={{ bgcolor: alpha(ORANGE_COLOR, 0.05) }}>
+                                                <TableCell colSpan={11} sx={{ p: 2 }}>
                                                     <Box sx={{ pl: 6 }}>
-                                                        <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1, color: '#ff9800' }}>
+                                                        <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1, color: ORANGE_COLOR }}>
                                                             Additional Information Required:
                                                         </Typography>
                                                         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
@@ -1677,6 +2585,7 @@ const UnverifiedTable = ({
                         )}
                     </TableBody>
                 </Table>
+
                 {totalCount > 0 && (
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
@@ -1688,31 +2597,29 @@ const UnverifiedTable = ({
                         onRowsPerPageChange={onRowsPerPageChange}
                         sx={{
                             borderTop: `1px solid ${alpha(color, 0.1)}`,
-                            '& .MuiTablePagination-toolbar': { minHeight: '52px' },
+                            '& .MuiTablePagination-toolbar': {
+                                minHeight: '52px',
+                                padding: '0 16px',
+                            },
+                            '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                                fontSize: '0.8rem',
+                                color: TEXT_COLOR,
+                                fontWeight: 400,
+                            },
+                            '& .MuiTablePagination-actions': {
+                                marginLeft: '8px',
+                            },
+                            '& .MuiIconButton-root': {
+                                padding: '6px',
+                            },
                         }}
                     />
                 )}
             </TableContainer>
-            {items.length > 0 && (
-                <Box sx={{
-                    p: 2,
-                    bgcolor: alpha('#ff9800', 0.1),
-                    borderTop: `1px solid ${alpha('#ff9800', 0.2)}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1
-                }}>
-                    <AlertTriangle size={18} color="#ff9800" />
-                    <Typography variant="caption" sx={{ color: '#ff9800', fontWeight: 500 }}>
-                        Warning: Please save your changes before leaving this page
-                    </Typography>
-                </Box>
-            )}
         </>
     );
 };
 
-// Holding Table Component
 const HoldingTable = ({
     items,
     selected,
@@ -1737,22 +2644,35 @@ const HoldingTable = ({
             <Table size="small">
                 <TableHead>
                     <TableRow sx={{
-                        bgcolor: alpha(color, 0.05),
+                        bgcolor: alpha(color, 0.04),
                         '& th': {
-                            borderBottom: `2px solid ${alpha(color, 0.2)}`,
+                            borderBottom: `2px solid ${alpha(color, 0.1)}`,
                             fontWeight: 600,
-                            fontSize: '0.85rem',
+                            fontSize: '0.8rem',
                             color: TEXT_COLOR,
                             py: 1.5,
                         }
                     }}>
-                        <TableCell padding="checkbox" width={50}>
+                        <TableCell
+                            padding="checkbox"
+                            width={50}
+                            sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                                pl: 2.5,
+                            }}
+                        >
                             <Checkbox
                                 size="small"
                                 checked={allSelectedOnPage}
                                 indeterminate={someSelectedOnPage && !allSelectedOnPage}
                                 onChange={onToggleAll}
-                                sx={{ padding: '6px' }}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    padding: '4px',
+                                }}
                             />
                         </TableCell>
                         <TableCell>W.O Date & Elapsed Time</TableCell>
@@ -1760,7 +2680,7 @@ const HoldingTable = ({
                         <TableCell>Address</TableCell>
                         <TableCell align="center">Prior Locked Report</TableCell>
                         <TableCell align="center">Unlocked Report Link</TableCell>
-                        <TableCell>Reason in Holding</TableCell>
+                        <TableCell>Reason in Holding & Notes</TableCell>
                         <TableCell align="center">LOCKED</TableCell>
                         <TableCell align="center">DELETE</TableCell>
                     </TableRow>
@@ -1768,11 +2688,24 @@ const HoldingTable = ({
                 <TableBody>
                     {items.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                                    <AlertOctagon size={40} color={alpha(TEXT_COLOR, 0.2)} />
-                                    <Typography variant="body2" sx={{ color: GRAY_COLOR }}>
-                                        No reports in holding
+                            <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
+                                <Box sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                }}>
+                                    <AlertOctagon size={32} color={alpha(TEXT_COLOR, 0.2)} />
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: TEXT_COLOR,
+                                            opacity: 0.6,
+                                            fontSize: '0.85rem',
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        No records found
                                     </Typography>
                                 </Box>
                             </TableCell>
@@ -1788,19 +2721,27 @@ const HoldingTable = ({
                                     key={item.id}
                                     hover
                                     sx={{
-                                        bgcolor: isSelected ? alpha(color, 0.08) : 'white',
-                                        '&:hover': { backgroundColor: alpha(color, 0.05) },
+                                        bgcolor: isSelected ? alpha(color, 0.1) : 'white',
+                                        '&:hover': {
+                                            backgroundColor: alpha(color, 0.05),
+                                        },
+                                        '&:last-child td': {
+                                            borderBottom: 'none',
+                                        },
                                     }}
                                 >
-                                    <TableCell padding="checkbox">
+                                    <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
                                         <Checkbox
-                                            size="small"
                                             checked={isSelected}
                                             onChange={() => onToggleSelect(item.id)}
-                                            sx={{ padding: '6px' }}
+                                            size="small"
+                                            sx={{
+                                                color: TEXT_COLOR,
+                                                padding: '4px',
+                                            }}
                                         />
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         <Box>
                                             <Typography variant="body2" sx={{ fontWeight: 500, color: TEXT_COLOR }}>
                                                 {item.date}
@@ -1817,11 +2758,11 @@ const HoldingTable = ({
                                             </Typography>
                                         </Box>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         <Stack direction="row" spacing={1} alignItems="center">
                                             <Avatar sx={{
-                                                width: 32,
-                                                height: 32,
+                                                width: 28,
+                                                height: 28,
                                                 bgcolor: color,
                                                 fontSize: '0.85rem',
                                                 fontWeight: 600
@@ -1831,7 +2772,7 @@ const HoldingTable = ({
                                             <Typography variant="body2">{item.technician}</Typography>
                                         </Stack>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                             {item.street}
                                         </Typography>
@@ -1839,57 +2780,99 @@ const HoldingTable = ({
                                             {item.city}, {item.state} {item.zip}
                                         </Typography>
                                     </TableCell>
-                                    <TableCell align="center">
+                                    <TableCell align="center" sx={{ py: 1.5 }}>
                                         {item.priorLockedReport ? (
                                             <Tooltip title="View Prior Locked Report">
-                                                <IconButton size="small" color="primary">
-                                                    <FileText size={20} />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => window.open(item.lastReportLink, '_blank')}
+                                                    sx={{
+                                                        color: BLUE_COLOR,
+                                                        '&:hover': {
+                                                            backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                                        },
+                                                    }}
+                                                >
+                                                    <FileText size={18} />
                                                 </IconButton>
                                             </Tooltip>
                                         ) : (
                                             <Typography variant="caption" sx={{ color: GRAY_COLOR }}>—</Typography>
                                         )}
                                     </TableCell>
-                                    <TableCell align="center">
+                                    <TableCell align="center" sx={{ py: 1.5 }}>
                                         {item.unlockedReportLink ? (
                                             <Tooltip title="Edit Unlocked Report">
-                                                <IconButton size="small" color="secondary">
-                                                    <Edit size={20} />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => window.open(item.unlockedReportLink, '_blank')}
+                                                    sx={{
+                                                        color: ORANGE_COLOR,
+                                                        '&:hover': {
+                                                            backgroundColor: alpha(ORANGE_COLOR, 0.1),
+                                                        },
+                                                    }}
+                                                >
+                                                    <Edit size={18} />
                                                 </IconButton>
                                             </Tooltip>
                                         ) : (
                                             <Typography variant="caption" sx={{ color: GRAY_COLOR }}>—</Typography>
                                         )}
                                     </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={item.reason}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: alpha(color, 0.1),
-                                                color: color,
-                                                fontWeight: 500,
-                                                fontSize: '0.75rem',
-                                            }}
-                                        />
+                                    <TableCell sx={{ py: 1.5 }}>
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                            <Chip
+                                                label={item.reason}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: alpha(color, 0.1),
+                                                    color: color,
+                                                    fontWeight: 500,
+                                                    fontSize: '0.75rem',
+                                                    alignSelf: 'flex-start',
+                                                }}
+                                            />
+                                            {item.notes && (
+                                                <Typography variant="caption" sx={{
+                                                    color: TEXT_COLOR,
+                                                    fontSize: '0.75rem',
+                                                    lineHeight: 1.2,
+                                                    whiteSpace: 'normal',
+                                                    wordBreak: 'break-word',
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    maxWidth: '250px',
+                                                }}>
+                                                    {item.notes}
+                                                </Typography>
+                                            )}
+                                        </Box>
                                     </TableCell>
-                                    <TableCell align="center">
-                                        <Checkbox
-                                            size="small"
-                                            checked={isLocked}
-                                            onChange={() => onLockedToggle(item.id)}
-                                            disabled={isDelete}
-                                            sx={{ padding: '6px' }}
-                                        />
+                                    <TableCell align="center" sx={{ py: 1.5 }}>
+                                        <Tooltip title="Locked - Requires Save Changes">
+                                            <Checkbox
+                                                size="small"
+                                                checked={isLocked}
+                                                onChange={() => onLockedToggle(item.id)}
+                                                disabled={isDelete}
+                                                sx={{ padding: '6px' }}
+                                            />
+                                        </Tooltip>
                                     </TableCell>
-                                    <TableCell align="center">
-                                        <Checkbox
-                                            size="small"
-                                            checked={isDelete}
-                                            onChange={() => onDeleteToggle(item.id)}
-                                            disabled={isLocked}
-                                            sx={{ padding: '6px' }}
-                                        />
+                                    <TableCell align="center" sx={{ py: 1.5 }}>
+                                        <Tooltip title="Delete - Updates status to 'DELETED' and rme_completed=true on Save Changes">
+                                            <Checkbox
+                                                size="small"
+                                                checked={isDelete}
+                                                onChange={() => onDeleteToggle(item.id)}
+                                                disabled={isLocked}
+                                                sx={{ padding: '6px' }}
+                                            />
+                                        </Tooltip>
                                     </TableCell>
                                 </TableRow>
                             );
@@ -1897,6 +2880,7 @@ const HoldingTable = ({
                     )}
                 </TableBody>
             </Table>
+
             {totalCount > 0 && (
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
@@ -1908,7 +2892,21 @@ const HoldingTable = ({
                     onRowsPerPageChange={onRowsPerPageChange}
                     sx={{
                         borderTop: `1px solid ${alpha(color, 0.1)}`,
-                        '& .MuiTablePagination-toolbar': { minHeight: '52px' },
+                        '& .MuiTablePagination-toolbar': {
+                            minHeight: '52px',
+                            padding: '0 16px',
+                        },
+                        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                            fontSize: '0.8rem',
+                            color: TEXT_COLOR,
+                            fontWeight: 400,
+                        },
+                        '& .MuiTablePagination-actions': {
+                            marginLeft: '8px',
+                        },
+                        '& .MuiIconButton-root': {
+                            padding: '6px',
+                        },
                     }}
                 />
             )}
@@ -1916,7 +2914,6 @@ const HoldingTable = ({
     );
 };
 
-// Finalized Table Component
 const FinalizedTable = ({
     items,
     selected,
@@ -1937,22 +2934,35 @@ const FinalizedTable = ({
             <Table size="small">
                 <TableHead>
                     <TableRow sx={{
-                        bgcolor: alpha(color, 0.05),
+                        bgcolor: alpha(color, 0.04),
                         '& th': {
-                            borderBottom: `2px solid ${alpha(color, 0.2)}`,
+                            borderBottom: `2px solid ${alpha(color, 0.1)}`,
                             fontWeight: 600,
-                            fontSize: '0.85rem',
+                            fontSize: '0.8rem',
                             color: TEXT_COLOR,
                             py: 1.5,
                         }
                     }}>
-                        <TableCell padding="checkbox" width={50}>
+                        <TableCell
+                            padding="checkbox"
+                            width={50}
+                            sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                py: 1.5,
+                                pl: 2.5,
+                            }}
+                        >
                             <Checkbox
                                 size="small"
                                 checked={allSelectedOnPage}
                                 indeterminate={someSelectedOnPage && !allSelectedOnPage}
                                 onChange={onToggleAll}
-                                sx={{ padding: '6px' }}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    padding: '4px',
+                                }}
                             />
                         </TableCell>
                         <TableCell>Status</TableCell>
@@ -1963,11 +2973,24 @@ const FinalizedTable = ({
                 <TableBody>
                     {items.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                                    <CheckCircle size={40} color={alpha(TEXT_COLOR, 0.2)} />
-                                    <Typography variant="body2" sx={{ color: GRAY_COLOR }}>
-                                        No finalized reports
+                            <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                                <Box sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                }}>
+                                    <CheckCircle size={32} color={alpha(TEXT_COLOR, 0.2)} />
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: TEXT_COLOR,
+                                            opacity: 0.6,
+                                            fontSize: '0.85rem',
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        No records found
                                     </Typography>
                                 </Box>
                             </TableCell>
@@ -1981,19 +3004,27 @@ const FinalizedTable = ({
                                     key={item.id}
                                     hover
                                     sx={{
-                                        bgcolor: isSelected ? alpha(color, 0.08) : 'white',
-                                        '&:hover': { backgroundColor: alpha(color, 0.05) },
+                                        bgcolor: isSelected ? alpha(color, 0.1) : 'white',
+                                        '&:hover': {
+                                            backgroundColor: alpha(color, 0.05),
+                                        },
+                                        '&:last-child td': {
+                                            borderBottom: 'none',
+                                        },
                                     }}
                                 >
-                                    <TableCell padding="checkbox">
+                                    <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
                                         <Checkbox
-                                            size="small"
                                             checked={isSelected}
                                             onChange={() => onToggleSelect(item.id)}
-                                            sx={{ padding: '6px' }}
+                                            size="small"
+                                            sx={{
+                                                color: TEXT_COLOR,
+                                                padding: '4px',
+                                            }}
                                         />
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         <Chip
                                             label={item.status}
                                             size="small"
@@ -2005,12 +3036,12 @@ const FinalizedTable = ({
                                             }}
                                         />
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                            {item.date}
+                                            {formatDate(item.actionTime)}
                                         </Typography>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 1.5 }}>
                                         <Box>
                                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                 {item.by}
@@ -2026,6 +3057,7 @@ const FinalizedTable = ({
                     )}
                 </TableBody>
             </Table>
+
             {totalCount > 0 && (
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
@@ -2037,156 +3069,25 @@ const FinalizedTable = ({
                     onRowsPerPageChange={onRowsPerPageChange}
                     sx={{
                         borderTop: `1px solid ${alpha(color, 0.1)}`,
-                        '& .MuiTablePagination-toolbar': { minHeight: '52px' },
+                        '& .MuiTablePagination-toolbar': {
+                            minHeight: '52px',
+                            padding: '0 16px',
+                        },
+                        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                            fontSize: '0.8rem',
+                            color: TEXT_COLOR,
+                            fontWeight: 400,
+                        },
+                        '& .MuiTablePagination-actions': {
+                            marginLeft: '8px',
+                        },
+                        '& .MuiIconButton-root': {
+                            padding: '6px',
+                        },
                     }}
                 />
             )}
         </TableContainer>
-    );
-};
-
-// History Modal Component
-const HistoryModal = ({
-    open,
-    onClose,
-    historySearch,
-    setHistorySearch,
-    historyReports,
-    filteredHistoryReports,
-    historyPage,
-    historyRowsPerPage,
-    onPageChange,
-    onRowsPerPageChange,
-    selectedHistoryItems,
-    toggleHistorySelection,
-    toggleAllHistorySelection,
-}) => {
-    const historyModalPageItems = filteredHistoryReports.slice(
-        historyPage * historyRowsPerPage,
-        historyPage * historyRowsPerPage + historyRowsPerPage
-    );
-
-    return (
-        <Modal open={open} onClose={onClose}>
-            <Box sx={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: '90%',
-                maxWidth: 1200,
-                maxHeight: '90vh',
-                bgcolor: 'white',
-                borderRadius: '8px',
-                boxShadow: 24,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-            }}>
-                <Box sx={{
-                    p: 3,
-                    borderBottom: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
-                    bgcolor: alpha(PURPLE_COLOR, 0.03),
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <History size={24} color={PURPLE_COLOR} />
-                        <Box>
-                            <Typography variant="h6">RME History</Typography>
-                            <Typography variant="body2" sx={{ color: GRAY_COLOR }}>
-                                View all lock/delete history
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <IconButton onClick={onClose} size="small">
-                        <X size={20} />
-                    </IconButton>
-                </Box>
-
-                <Box sx={{ p: 2, borderBottom: `1px solid ${alpha(PURPLE_COLOR, 0.1)}` }}>
-                    <SearchInput
-                        value={historySearch}
-                        onChange={setHistorySearch}
-                        placeholder="Search history..."
-                    />
-                </Box>
-
-                <Box sx={{ flex: 1, overflow: 'auto' }}>
-                    <TableContainer>
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow sx={{ bgcolor: alpha(PURPLE_COLOR, 0.05) }}>
-                                    <TableCell padding="checkbox">
-                                        <Checkbox
-                                            size="small"
-                                            checked={historyModalPageItems.length > 0 &&
-                                                historyModalPageItems.every(item => selectedHistoryItems.has(item.id))}
-                                            indeterminate={historyModalPageItems.length > 0 &&
-                                                historyModalPageItems.some(item => selectedHistoryItems.has(item.id)) &&
-                                                !historyModalPageItems.every(item => selectedHistoryItems.has(item.id))}
-                                            onChange={toggleAllHistorySelection}
-                                        />
-                                    </TableCell>
-                                    <TableCell>Status</TableCell>
-                                    <TableCell>Date</TableCell>
-                                    <TableCell>By Manager</TableCell>
-                                    <TableCell>Report ID</TableCell>
-                                    <TableCell>Address</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {historyModalPageItems.map((item) => (
-                                    <TableRow key={item.id} hover>
-                                        <TableCell padding="checkbox">
-                                            <Checkbox
-                                                size="small"
-                                                checked={selectedHistoryItems.has(item.id)}
-                                                onChange={() => toggleHistorySelection(item.id)}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={item.status}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: alpha(item.statusColor, 0.1),
-                                                    color: item.statusColor,
-                                                    fontWeight: 600,
-                                                }}
-                                            />
-                                        </TableCell>
-                                        <TableCell>{item.date}</TableCell>
-                                        <TableCell>
-                                            <Box>
-                                                <Typography variant="body2">{item.by}</Typography>
-                                                <Typography variant="caption" sx={{ color: GRAY_COLOR }}>
-                                                    {item.byEmail}
-                                                </Typography>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>{item.reportId}</TableCell>
-                                        <TableCell>{item.address}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Box>
-
-                <TablePagination
-                    rowsPerPageOptions={[10, 25, 50, 100]}
-                    component="div"
-                    count={filteredHistoryReports.length}
-                    rowsPerPage={historyRowsPerPage}
-                    page={historyPage}
-                    onPageChange={onPageChange}
-                    onRowsPerPageChange={onRowsPerPageChange}
-                    sx={{ borderTop: `1px solid ${alpha(PURPLE_COLOR, 0.1)}` }}
-                />
-            </Box>
-        </Modal>
     );
 };
 

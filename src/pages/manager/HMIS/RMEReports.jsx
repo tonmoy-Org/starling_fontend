@@ -54,6 +54,7 @@ import {
     Save,
     Edit,
     RotateCcw,
+    ExternalLink,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import DashboardLoader from '../../../components/Loader/DashboardLoader';
@@ -159,6 +160,119 @@ const getTechnicianInitial = (technicianName) => {
     return technicianName.charAt(0).toUpperCase();
 };
 
+// PDF Viewer Modal Component
+const PDFViewerModal = ({ open, onClose, pdfUrl }) => {
+    return (
+        <Modal
+            open={open}
+            onClose={onClose}
+            aria-labelledby="pdf-viewer-modal"
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            <Box sx={{
+                width: '90%',
+                height: '90%',
+                maxWidth: 1200,
+                bgcolor: 'white',
+                borderRadius: '8px',
+                boxShadow: 24,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+            }}>
+                <Box sx={{
+                    p: 2,
+                    borderBottom: `1px solid ${alpha(BLUE_COLOR, 0.1)}`,
+                    bgcolor: alpha(BLUE_COLOR, 0.03),
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(BLUE_COLOR, 0.1),
+                            color: BLUE_COLOR,
+                        }}>
+                            <FileText size={20} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                color: TEXT_COLOR,
+                                mb: 0.5,
+                            }}>
+                                PDF Viewer
+                            </Typography>
+                            <Typography variant="body2" sx={{
+                                fontSize: '0.85rem',
+                                color: GRAY_COLOR,
+                            }}>
+                                Last Locked Report
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <IconButton
+                        size="small"
+                        onClick={onClose}
+                        sx={{
+                            color: GRAY_COLOR,
+                            '&:hover': {
+                                backgroundColor: alpha(GRAY_COLOR, 0.1),
+                            },
+                        }}
+                    >
+                        <X size={20} />
+                    </IconButton>
+                </Box>
+
+                <Box sx={{ flex: 1, p: 2 }}>
+                    {pdfUrl ? (
+                        <iframe
+                            src={pdfUrl}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                border: 'none',
+                                borderRadius: '4px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            }}
+                            title="PDF Viewer"
+                        />
+                    ) : (
+                        <Box sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '100%',
+                            gap: 2,
+                        }}>
+                            <FileText size={48} color={alpha(GRAY_COLOR, 0.3)} />
+                            <Typography variant="body2" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.9rem',
+                            }}>
+                                No PDF available
+                            </Typography>
+                        </Box>
+                    )}
+                </Box>
+            </Box>
+        </Modal>
+    );
+};
+
 const RMEReports = () => {
     const queryClient = useQueryClient();
     const { user: authUser } = useAuth();
@@ -211,6 +325,10 @@ const RMEReports = () => {
 
     const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
     const [selectedForRestore, setSelectedForRestore] = useState(new Set());
+
+    // PDF Viewer state
+    const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+    const [currentPdfUrl, setCurrentPdfUrl] = useState('');
 
     // Snackbar
     const [snackbar, setSnackbar] = useState({
@@ -409,6 +527,19 @@ const RMEReports = () => {
         }
         return filtered;
     }, [processedData.finalized, searchFinalized]);
+
+    // Handle PDF view
+    const handleViewPDF = (pdfUrl) => {
+        setCurrentPdfUrl(pdfUrl);
+        setPdfViewerOpen(true);
+    };
+
+    // Handle unlocked report link click (opens in new tab)
+    const handleUnlockedReportClick = (url) => {
+        if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+    };
 
     // Mutations
     const bulkTechReportMutation = useMutation({
@@ -1176,6 +1307,8 @@ const RMEReports = () => {
                     rowsPerPage={rowsPerPageUnverified}
                     onPageChange={handleChangePageUnverified}
                     onRowsPerPageChange={handleChangeRowsPerPageUnverified}
+                    onViewPDF={handleViewPDF}
+                    onUnlockedReportClick={handleUnlockedReportClick}
                 />
             </Section>
 
@@ -1237,6 +1370,8 @@ const RMEReports = () => {
                     rowsPerPage={rowsPerPageHolding}
                     onPageChange={handleChangePageHolding}
                     onRowsPerPageChange={handleChangeRowsPerPageHolding}
+                    onViewPDF={handleViewPDF}
+                    onUnlockedReportClick={handleUnlockedReportClick}
                 />
             </Section>
 
@@ -1276,6 +1411,13 @@ const RMEReports = () => {
                     onRowsPerPageChange={handleChangeRowsPerPageFinalized}
                 />
             </Section>
+
+            {/* PDF Viewer Modal */}
+            <PDFViewerModal
+                open={pdfViewerOpen}
+                onClose={() => setPdfViewerOpen(false)}
+                pdfUrl={currentPdfUrl}
+            />
 
             {/* History Modal */}
             <Modal
@@ -2316,6 +2458,8 @@ const UnverifiedTable = ({
     rowsPerPage,
     onPageChange,
     onRowsPerPageChange,
+    onViewPDF,
+    onUnlockedReportClick,
 }) => {
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
@@ -2475,7 +2619,7 @@ const UnverifiedTable = ({
                                                     <Tooltip title="View Last Locked Report">
                                                         <IconButton
                                                             size="small"
-                                                            onClick={() => window.open(item.lastReportLink, '_blank')}
+                                                            onClick={() => onViewPDF(item.lastReportLink)}
                                                             sx={{
                                                                 color: BLUE_COLOR,
                                                                 '&:hover': {
@@ -2483,7 +2627,7 @@ const UnverifiedTable = ({
                                                                 },
                                                             }}
                                                         >
-                                                            <FileText size={18} />
+                                                            <img src="/src/public/icons/report.gif" alt="view-report" />
                                                         </IconButton>
                                                     </Tooltip>
                                                 ) : (
@@ -2492,10 +2636,10 @@ const UnverifiedTable = ({
                                             </TableCell>
                                             <TableCell align="center" sx={{ py: 1.5 }}>
                                                 {item.unlockedReport ? (
-                                                    <Tooltip title="Edit Unlocked Report">
+                                                    <Tooltip title="Open Unlocked Report in New Tab">
                                                         <IconButton
                                                             size="small"
-                                                            onClick={() => window.open(item.unlockedReportLink, '_blank')}
+                                                            onClick={() => onUnlockedReportClick(item.unlockedReportLink)}
                                                             sx={{
                                                                 color: ORANGE_COLOR,
                                                                 '&:hover': {
@@ -2503,7 +2647,7 @@ const UnverifiedTable = ({
                                                                 },
                                                             }}
                                                         >
-                                                            <File size={18} />
+                                                            <img src="/src/public/icons/Edit.gif" alt="view-report" />
                                                         </IconButton>
                                                     </Tooltip>
                                                 ) : (
@@ -2692,6 +2836,8 @@ const HoldingTable = ({
     rowsPerPage,
     onPageChange,
     onRowsPerPageChange,
+    onViewPDF,
+    onUnlockedReportClick,
 }) => {
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
@@ -2842,7 +2988,7 @@ const HoldingTable = ({
                                             <Tooltip title="View Prior Locked Report">
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => window.open(item.lastReportLink, '_blank')}
+                                                    onClick={() => onViewPDF(item.lastReportLink)}
                                                     sx={{
                                                         color: BLUE_COLOR,
                                                         '&:hover': {
@@ -2850,7 +2996,7 @@ const HoldingTable = ({
                                                         },
                                                     }}
                                                 >
-                                                    <FileText size={18} />
+                                                    <img src="/src/public/icons/report.gif" alt="view-report" />
                                                 </IconButton>
                                             </Tooltip>
                                         ) : (
@@ -2859,10 +3005,10 @@ const HoldingTable = ({
                                     </TableCell>
                                     <TableCell align="center" sx={{ py: 1.5 }}>
                                         {item.unlockedReportLink ? (
-                                            <Tooltip title="Edit Unlocked Report">
+                                            <Tooltip title="Open Unlocked Report in New Tab">
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => window.open(item.unlockedReportLink, '_blank')}
+                                                    onClick={() => onUnlockedReportClick(item.unlockedReportLink)}
                                                     sx={{
                                                         color: ORANGE_COLOR,
                                                         '&:hover': {
@@ -2870,7 +3016,7 @@ const HoldingTable = ({
                                                         },
                                                     }}
                                                 >
-                                                    <Edit size={18} />
+                                                     <img src="/src/public/icons/Edit.gif" alt="view-report" />
                                                 </IconButton>
                                             </Tooltip>
                                         ) : (

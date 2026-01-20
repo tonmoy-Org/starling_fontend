@@ -28,7 +28,7 @@ import Button from '@mui/material/Button';
 import { useAuth } from '../auth/AuthProvider';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import logo from '../public/logo.png';
+import logo from '../public/favicon/logo.png';
 import DashboardFooter from './DashboardFooter';
 
 import {
@@ -55,6 +55,27 @@ const drawerWidth = 250;
 const closedDrawerWidth = 60;
 const mobileDrawerWidth = 230;
 
+// Updated color variables
+const colors = {
+  primary: '#3182ce',
+  primaryLight: '#ebf8ff',
+  primaryDark: '#2c5282',
+  activeBg: '#ebf8ff',
+  activeText: '#3182ce',
+  activeBorder: '#3182ce',
+  drawerBg: '#ffffff',
+  textPrimary: '#2d3748',
+  textSecondary: '#718096',
+  textTertiary: '#a0aec0',
+  borderLight: '#e2e8f0',
+  hoverBg: '#f7fafc',
+  white: '#ffffff',
+  black: '#000000',
+  sidebarHover: '#f1f5f9',
+  sidebarActive: '#e6f7ff',
+  appBarBg: 'rgba(255, 255, 255, 0.1)',
+};
+
 const openedMixin = (theme) => ({
   width: drawerWidth,
   transition: theme.transitions.create('width', {
@@ -62,8 +83,9 @@ const openedMixin = (theme) => ({
     duration: theme.transitions.duration.enteringScreen,
   }),
   overflowX: 'hidden',
-  backgroundColor: '#1a365d',
-  backgroundImage: 'linear-gradient(135deg, #1a365d 0%, #2c5282 100%)',
+  backgroundColor: colors.drawerBg,
+  borderRight: `1px solid ${colors.borderLight}`,
+  boxShadow: '1px 0 4px rgba(0,0,0,0.04)',
   '&::-webkit-scrollbar': {
     display: 'none',
   },
@@ -78,8 +100,9 @@ const closedMixin = (theme) => ({
     duration: theme.transitions.duration.leavingScreen,
   }),
   overflowX: 'hidden',
-  backgroundColor: '#1a365d',
-  backgroundImage: 'linear-gradient(135deg, #1a365d 0%, #2c5282 100%)',
+  backgroundColor: colors.drawerBg,
+  borderRight: `1px solid ${colors.borderLight}`,
+  boxShadow: '1px 0 4px rgba(0,0,0,0.04)',
   '&::-webkit-scrollbar': {
     display: 'none',
   },
@@ -94,21 +117,25 @@ const DrawerHeader = styled('div')(({ theme }) => ({
   padding: theme.spacing(0, 0.5),
   minHeight: 52,
   flexShrink: 0,
+  borderBottom: `1px solid ${colors.borderLight}`,
 }));
 
 const AppBar = styled(MuiAppBar, {
   shouldForwardProp: (prop) => prop !== 'open',
 })(({ theme, open }) => ({
+  backgroundColor: colors.appBarBg,
+  backdropFilter: 'blur(10px)',
   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-  borderBottom: '1px solid rgba(0,0,0,0.08)',
-  transition: theme.transitions.create(['width', 'margin'], {
+  borderBottom: `1px solid ${alpha('#ffffff', 0.2)}`,
+  color: colors.textPrimary,
+  transition: theme.transitions.create(['width', 'margin', 'background-color'], {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
   }),
   ...(open && {
     marginLeft: drawerWidth,
     width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(['width', 'margin'], {
+    transition: theme.transitions.create(['width', 'margin', 'background-color'], {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
     }),
@@ -153,19 +180,19 @@ const ScrollableBox = styled(Box)({
 const SearchContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
-  backgroundColor: '#f8fafc',
-  border: '1px solid rgba(0,0,0,0.08)',
+  backgroundColor: alpha('#ffffff', 0.9),
+  border: `1px solid ${alpha('#ffffff', 0.3)}`,
   borderRadius: '5px',
   padding: '2px 10px',
   transition: 'all 0.2s ease',
   '&:hover': {
-    borderColor: '#3182ce',
-    backgroundColor: '#ffffff',
+    borderColor: alpha(colors.primary, 0.5),
+    backgroundColor: alpha('#ffffff', 0.95),
   },
   '&:focus-within': {
-    borderColor: '#3182ce',
-    backgroundColor: '#ffffff',
-    boxShadow: '0 0 0 2px rgba(49, 130, 206, 0.1)',
+    borderColor: colors.primary,
+    backgroundColor: alpha('#ffffff', 0.95),
+    boxShadow: `0 0 0 2px ${alpha(colors.primary, 0.1)}`,
   },
   [theme.breakpoints.down('md')]: {
     position: 'fixed',
@@ -174,25 +201,25 @@ const SearchContainer = styled(Box)(({ theme }) => ({
     right: 16,
     zIndex: theme.zIndex.appBar + 1,
     width: 'calc(100% - 32px)',
-    backgroundColor: '#ffffff',
+    backgroundColor: alpha('#ffffff', 0.95),
     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-    borderColor: '#3182ce',
+    borderColor: colors.primary,
     '&:hover, &:focus-within': {
-      borderColor: '#3182ce',
-      backgroundColor: '#ffffff',
+      borderColor: colors.primary,
+      backgroundColor: alpha('#ffffff', 0.95),
     },
   },
 }));
 
 const SearchInput = styled(InputBase)(({ theme }) => ({
-  color: '#4a5568',
+  color: colors.textPrimary,
   fontSize: '0.8rem',
   width: '100%',
   '& .MuiInputBase-input': {
     padding: '6px 0 6px 6px',
     fontSize: '0.8rem',
     '&::placeholder': {
-      color: '#a0aec0',
+      color: alpha(colors.textPrimary, 0.7),
       opacity: 1,
       fontSize: '0.8rem',
     },
@@ -223,15 +250,15 @@ const MobileSearchButton = styled(IconButton)(({ theme }) => ({
   display: 'none',
   [theme.breakpoints.down('md')]: {
     display: 'flex',
-    color: '#718096',
-    backgroundColor: '#f8fafc',
+    color: colors.textPrimary,
+    backgroundColor: alpha('#ffffff', 0.9),
     borderRadius: '5px',
-    border: '1px solid rgba(0,0,0,0.08)',
+    border: `1px solid ${alpha('#ffffff', 0.3)}`,
     width: 32,
     height: 32,
     '&:hover': {
-      backgroundColor: '#edf2f7',
-      color: '#3182ce',
+      backgroundColor: alpha('#ffffff', 0.95),
+      color: colors.primary,
     },
   },
 }));
@@ -273,7 +300,7 @@ const MobilePageTitle = styled(Typography)(({ theme }) => ({
     display: 'block',
     fontSize: '0.9rem',
     fontWeight: 600,
-    color: '#2d3748',
+    color: colors.textPrimary,
     lineHeight: 1.2,
     letterSpacing: '-0.01em',
     textOverflow: 'ellipsis',
@@ -285,11 +312,11 @@ const MobilePageTitle = styled(Typography)(({ theme }) => ({
 
 const HoverMenu = styled(Box)(({ theme }) => ({
   position: 'fixed',
-  backgroundColor: '#1a365d',
-  backgroundImage: 'linear-gradient(135deg, #1a365d 0%, #2c5282 100%)',
+  backgroundColor: colors.appBarBg,
+  backdropFilter: 'blur(10px)',
   borderRadius: '6px',
-  boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-  border: '1px solid rgba(255,255,255,0.15)',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+  border: `1px solid ${alpha('#ffffff', 0.2)}`,
   zIndex: theme.zIndex.drawer + 10,
   overflow: 'hidden',
   animation: 'fadeIn 0.15s ease-out',
@@ -307,16 +334,17 @@ const HoverMenuItem = styled(Box)(({ theme }) => ({
   gap: '10px',
   fontSize: '0.8rem',
   fontWeight: 500,
-  color: alpha('#ffffff', 0.85),
+  color: colors.textPrimary,
   transition: 'all 0.2s ease',
+  backgroundColor: 'transparent',
   '&:hover': {
-    backgroundColor: alpha('#ffffff', 0.1),
-    color: '#ffffff',
+    backgroundColor: alpha('#ffffff', 0.15),
+    color: colors.primary,
   },
   '&.active': {
-    backgroundColor: alpha('#ffffff', 0.15),
-    color: '#ffffff',
-    borderLeft: '2px solid #63b3ed',
+    backgroundColor: alpha(colors.primary, 0.2),
+    color: colors.primary,
+    borderLeft: `2px solid ${colors.activeBorder}`,
   },
 }));
 
@@ -490,14 +518,14 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: alpha('#3182ce', 0.1),
-              color: '#3182ce',
+              backgroundColor: alpha(colors.primary, 0.1),
+              color: colors.primary,
             }}>
               <User size={20} />
             </Box>
             <Box>
               <Typography variant="h6" sx={{
-                color: '#1a202c',
+                color: colors.textPrimary,
                 fontSize: '1rem',
                 fontWeight: 600,
                 lineHeight: 1.2,
@@ -505,7 +533,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
                 User Profile
               </Typography>
               <Typography variant="caption" sx={{
-                color: '#718096',
+                color: colors.textSecondary,
                 fontSize: '0.75rem',
                 fontWeight: 400,
               }}>
@@ -517,10 +545,10 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
             onClick={onClose}
             size="small"
             sx={{
-              color: '#718096',
+              color: colors.textSecondary,
               '&:hover': {
-                backgroundColor: alpha('#718096', 0.1),
-                color: '#4a5568',
+                backgroundColor: alpha(colors.textSecondary, 0.1),
+                color: colors.textPrimary,
               },
             }}
           >
@@ -536,8 +564,8 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
               sx={{
                 width: 100,
                 height: 100,
-                bgcolor: '#3182ce',
-                color: '#ffffff',
+                bgcolor: colors.primary,
+                color: colors.white,
                 fontSize: '2rem',
                 fontWeight: 600,
                 border: '4px solid #ffffff',
@@ -554,7 +582,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
           </Box>
 
           <Typography variant="h5" sx={{
-            color: '#1a202c',
+            color: colors.textPrimary,
             fontSize: '1.25rem',
             fontWeight: 600,
             mb: 0.5,
@@ -586,7 +614,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
         </Box>
 
         <Box sx={{
-          backgroundColor: '#f8fafc',
+          backgroundColor: colors.hoverBg,
           borderRadius: '8px',
           p: 2.5,
           mb: 2,
@@ -595,7 +623,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
           },
         }}>
           <Typography variant="subtitle2" sx={{
-            color: '#4a5568',
+            color: colors.textSecondary,
             fontSize: '0.8rem',
             fontWeight: 600,
             mb: 2,
@@ -610,7 +638,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Box>
               <Typography variant="caption" sx={{
-                color: '#718096',
+                color: colors.textTertiary,
                 fontSize: '0.7rem',
                 fontWeight: 500,
                 mb: 0.5,
@@ -619,9 +647,9 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
                 Email Address
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Mail size={14} color="#718096" />
+                <Mail size={14} color={colors.textTertiary} />
                 <Typography variant="body2" sx={{
-                  color: '#1a202c',
+                  color: colors.textPrimary,
                   fontSize: '0.85rem',
                   fontWeight: 500,
                   wordBreak: 'break-word',
@@ -633,7 +661,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
 
             <Box>
               <Typography variant="caption" sx={{
-                color: '#718096',
+                color: colors.textTertiary,
                 fontSize: '0.7rem',
                 fontWeight: 500,
                 mb: 0.5,
@@ -642,9 +670,9 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
                 Account Role
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Shield size={14} color="#718096" />
+                <Shield size={14} color={colors.textTertiary} />
                 <Typography variant="body2" sx={{
-                  color: '#1a202c',
+                  color: colors.textPrimary,
                   fontSize: '0.85rem',
                   fontWeight: 500,
                 }}>
@@ -655,7 +683,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
 
             <Box>
               <Typography variant="caption" sx={{
-                color: '#718096',
+                color: colors.textTertiary,
                 fontSize: '0.7rem',
                 fontWeight: 500,
                 mb: 0.5,
@@ -664,9 +692,9 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
                 Member Since
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Calendar size={14} color="#718096" />
+                <Calendar size={14} color={colors.textTertiary} />
                 <Typography variant="body2" sx={{
-                  color: '#1a202c',
+                  color: colors.textPrimary,
                   fontSize: '0.85rem',
                   fontWeight: 500,
                 }}>
@@ -696,11 +724,11 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
             textTransform: 'none',
             fontSize: '0.85rem',
             fontWeight: 500,
-            color: '#3182ce',
-            borderColor: '#cbd5e0',
+            color: colors.primary,
+            borderColor: colors.borderLight,
             '&:hover': {
-              borderColor: '#3182ce',
-              backgroundColor: alpha('#3182ce', 0.04),
+              borderColor: colors.primary,
+              backgroundColor: alpha(colors.primary, 0.04),
             },
           }}
         >
@@ -711,7 +739,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
   );
 };
 
-const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handleNavigation, isMobile, location }) => {
+const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handleNavigation, isMobile, location, onHoverMenuOpen }) => {
   const isExpandable = item.isExpandable;
   const isExpanded = item.expanded;
   const [hoverMenuAnchor, setHoverMenuAnchor] = React.useState(null);
@@ -739,6 +767,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
     if (!isDrawerOpen && !isMobile) {
       clearTimeout(hoverTimeout);
       setHoverMenuAnchor(event.currentTarget);
+      onHoverMenuOpen && onHoverMenuOpen(true);
     }
   };
 
@@ -746,6 +775,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
     if (!isDrawerOpen && !isMobile) {
       const timeout = setTimeout(() => {
         setHoverMenuAnchor(null);
+        onHoverMenuOpen && onHoverMenuOpen(false);
       }, 200);
       setHoverTimeout(timeout);
     }
@@ -758,6 +788,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
   const handleHoverMenuMouseLeave = () => {
     const timeout = setTimeout(() => {
       setHoverMenuAnchor(null);
+      onHoverMenuOpen && onHoverMenuOpen(false);
     }, 200);
     setHoverTimeout(timeout);
   };
@@ -776,6 +807,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
       handleNavigation(item.path);
     }
     setHoverMenuAnchor(null);
+    onHoverMenuOpen && onHoverMenuOpen(false);
   };
 
   const mainButton = (
@@ -862,7 +894,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
       componentsProps={{
         tooltip: {
           sx: {
-            backgroundColor: '#2d3748',
+            backgroundColor: colors.textPrimary,
             fontSize: '0.75rem',
             padding: '3px 6px',
             borderRadius: '3px',
@@ -870,7 +902,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
         },
         arrow: {
           sx: {
-            color: '#2d3748',
+            color: colors.textPrimary,
           }
         }
       }}
@@ -902,10 +934,10 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
           className={isActive ? 'active' : ''}
           sx={{
             fontWeight: 600,
-            borderBottom: hasSubItems ? '1px solid rgba(255,255,255,0.15)' : 'none',
+            borderBottom: hasSubItems ? `1px solid ${alpha('#ffffff', 0.2)}` : 'none',
           }}
         >
-          {React.cloneElement(item.icon, { size: 16, color: isActive ? '#ffffff' : alpha('#ffffff', 0.85) })}
+          {React.cloneElement(item.icon, { size: 16, color: isActive ? colors.primary : colors.textPrimary })}
           <span>{item.text}</span>
           {item.path && (item.path.startsWith('http://') || item.path.startsWith('https://')) && (
             <Box component="span" sx={{ ml: 'auto', fontSize: '0.7rem', opacity: 0.7 }}>
@@ -935,6 +967,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
                     subItem.onClick(event);
                   }
                   setHoverMenuAnchor(null);
+                  onHoverMenuOpen && onHoverMenuOpen(false);
                 }}
                 className={isSubItemActive ? 'active' : ''}
                 sx={{
@@ -943,7 +976,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
               >
                 {subItem.icon && React.cloneElement(subItem.icon, {
                   size: 14,
-                  color: isSubItemActive ? '#ffffff' : alpha('#ffffff', 0.85)
+                  color: isSubItemActive ? colors.primary : colors.textPrimary
                 })}
                 <span>{subItem.text}</span>
                 {isSubItemExternal && (
@@ -972,6 +1005,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
                         nestedItem.onClick(event);
                       }
                       setHoverMenuAnchor(null);
+                      onHoverMenuOpen && onHoverMenuOpen(false);
                     }}
                     className={isNestedItemActive ? 'active' : ''}
                     sx={{
@@ -980,7 +1014,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
                   >
                     {nestedItem.icon && React.cloneElement(nestedItem.icon, {
                       size: 12,
-                      color: isNestedItemActive ? '#ffffff' : alpha('#ffffff', 0.85)
+                      color: isNestedItemActive ? colors.primary : colors.textPrimary
                     })}
                     <span style={{ fontSize: '0.75rem' }}>{nestedItem.text}</span>
                     {isNestedItemExternal && (
@@ -1015,7 +1049,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
         <List sx={{
           py: 0,
           pl: 0,
-          backgroundColor: level === 0 ? alpha('#000000', 0.1) : 'transparent'
+          backgroundColor: level === 0 ? alpha(colors.textTertiary, 0.05) : 'transparent'
         }}>
           {item.subItems.map((subItem, index) => (
             <NestedMenuItem
@@ -1027,6 +1061,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
               handleNavigation={handleNavigation}
               isMobile={isMobile}
               location={location}
+              onHoverMenuOpen={onHoverMenuOpen}
             />
           ))}
         </List>
@@ -1049,6 +1084,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
   const [menuAnchorEl, setMenuAnchorEl] = React.useState(null);
   const [profileDialogOpen, setProfileDialogOpen] = React.useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
+  const [hoverMenuOpen, setHoverMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
     setOpen(!isMobile);
@@ -1103,15 +1139,15 @@ export default function DashboardLayout({ children, title, menuItems }) {
 
     if (isActive) {
       return {
-        color: '#ffffff !important',
-        backgroundColor: alpha('#ffffff', 0.15),
-        borderLeft: '2px solid #63b3ed',
+        color: `${colors.primary} !important`,
+        backgroundColor: colors.activeBg,
+        borderLeft: `2px solid ${colors.activeBorder}`,
         '& .MuiListItemIcon-root': {
-          color: '#ffffff',
+          color: colors.primary,
         },
         '&:hover': {
-          backgroundColor: alpha('#ffffff', 0.2),
-          color: '#ffffff !important',
+          backgroundColor: alpha(colors.primary, 0.15),
+          color: `${colors.primary} !important`,
         },
         borderRadius: '0 5px 5px 0',
         transition: 'all 0.15s ease',
@@ -1121,16 +1157,16 @@ export default function DashboardLayout({ children, title, menuItems }) {
     }
 
     return {
-      color: alpha('#ffffff', 0.85),
+      color: colors.textSecondary,
       backgroundColor: 'transparent',
       '& .MuiListItemIcon-root': {
-        color: alpha('#ffffff', 0.85),
+        color: colors.textSecondary,
       },
       '&:hover': {
-        backgroundColor: alpha('#ffffff', 0.1),
-        color: '#ffffff',
+        backgroundColor: colors.sidebarHover,
+        color: colors.primary,
         '& .MuiListItemIcon-root': {
-          color: '#ffffff',
+          color: colors.primary,
         },
       },
       borderRadius: '0 5px 5px 0',
@@ -1194,12 +1230,16 @@ export default function DashboardLayout({ children, title, menuItems }) {
     setMobileSearchOpen(false);
   };
 
+  const handleHoverMenuOpen = (isOpen) => {
+    setHoverMenuOpen(isOpen);
+  };
+
   const renderDrawerContent = () => (
     <Box sx={{
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      color: '#ffffff',
+      color: colors.textPrimary,
       '& .MuiListItemIcon-root': {
         color: 'inherit',
       },
@@ -1207,7 +1247,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
         color: 'inherit',
       },
       '& .MuiDivider-root': {
-        borderColor: alpha('#ffffff', 0.15),
+        borderColor: colors.borderLight,
       },
     }}>
       <DrawerHeader>
@@ -1223,7 +1263,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
               src={logo}
               alt="Logo"
               style={{
-                width: '140px',
+                width: '160px',
                 height: 'auto',
               }}
             />
@@ -1241,7 +1281,6 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 style={{
                   width: '28px',
                   height: 'auto',
-                  filter: 'brightness(0) invert(1)'
                 }}
               />
             </Box>
@@ -1250,7 +1289,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
       </DrawerHeader>
 
       <Divider sx={{
-        borderColor: alpha('#ffffff', 0.15),
+        borderColor: colors.borderLight,
         my: 0.5,
       }} />
 
@@ -1266,7 +1305,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 <Typography
                   variant="caption"
                   sx={{
-                    color: alpha('#ffffff', 0.6),
+                    color: colors.textTertiary,
                     fontSize: '0.65rem',
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -1290,6 +1329,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                   handleNavigation={handleNavigation}
                   isMobile={isMobile}
                   location={location}
+                  onHoverMenuOpen={handleHoverMenuOpen}
                 />
               ))}
             </List>
@@ -1311,10 +1351,10 @@ export default function DashboardLayout({ children, title, menuItems }) {
         position="fixed"
         open={open && !isMobile}
         sx={{
-          zIndex: theme.zIndex.drawer + (mobileSearchOpen ? 2 : 1),
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          zIndex: theme.zIndex.drawer + (mobileSearchOpen ? 2 : 1) + (hoverMenuOpen ? 1 : 0),
+          backgroundColor: colors.appBarBg,
           backdropFilter: 'blur(10px)',
-          boxShadow: 0.5,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
           transition: 'all 0.3s ease',
         }}
       >
@@ -1337,12 +1377,12 @@ export default function DashboardLayout({ children, title, menuItems }) {
                   width: 32,
                   height: 32,
                   borderRadius: '5px',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  backgroundColor: '#f8fafc',
-                  color: '#4a5568',
+                  border: `1px solid ${alpha('#ffffff', 0.3)}`,
+                  backgroundColor: alpha('#ffffff', 0.9),
+                  color: colors.textPrimary,
                   '&:hover': {
-                    backgroundColor: '#edf2f7',
-                    borderColor: '#cbd5e0',
+                    backgroundColor: alpha('#ffffff', 0.95),
+                    borderColor: alpha('#ffffff', 0.5),
                   },
                 }}
               >
@@ -1359,12 +1399,12 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 onClick={handleDrawerToggle}
                 edge="start"
                 sx={{
-                  color: '#4a5568',
-                  backgroundColor: '#f8fafc',
+                  color: colors.textPrimary,
+                  backgroundColor: alpha('#ffffff', 0.9),
                   borderRadius: '5px',
-                  border: '1px solid rgba(0,0,0,0.08)',
+                  border: `1px solid ${alpha('#ffffff', 0.3)}`,
                   '&:hover': {
-                    backgroundColor: '#edf2f7',
+                    backgroundColor: alpha('#ffffff', 0.95),
                   },
                 }}
               >
@@ -1382,7 +1422,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 noWrap
                 sx={{
                   fontWeight: 600,
-                  color: '#2d3748',
+                  color: colors.textPrimary,
                   fontSize: '0.95rem',
                   lineHeight: 1.2,
                   letterSpacing: '-0.01em',
@@ -1403,19 +1443,19 @@ export default function DashboardLayout({ children, title, menuItems }) {
                           mx: 0.5,
                         }}
                       >
-                        <ChevronRight size={14} color="#a0aec0" />
+                        <ChevronRight size={14} color={alpha(colors.textPrimary, 0.7)} />
                       </Box>
                     )}
                     <Box
                       component="span"
                       onClick={() => !item.isLast && handleBreadcrumbClick(item.path)}
                       sx={{
-                        color: item.isLast ? '#3182ce' : '#4a5568',
+                        color: item.isLast ? colors.primary : alpha(colors.textPrimary, 0.9),
                         cursor: item.isLast ? 'default' : 'pointer',
                         fontSize: '0.95rem',
                         fontWeight: item.isLast ? 600 : 500,
                         '&:hover': !item.isLast ? {
-                          color: '#3182ce',
+                          color: colors.primary,
                           textDecoration: 'underline',
                         } : {},
                         display: 'flex',
@@ -1429,7 +1469,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                           width: 4,
                           height: 4,
                           borderRadius: '50%',
-                          backgroundColor: '#3182ce',
+                          backgroundColor: colors.primary,
                           ml: 0.5,
                         }} />
                       )}
@@ -1442,7 +1482,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
 
           <DesktopActionsContainer>
             <SearchContainer sx={{ width: '280px' }}>
-              <Search size={16} color="#a0aec0" />
+              <Search size={16} color={alpha(colors.textPrimary, 0.7)} />
               <SearchInput
                 placeholder="Q Search"
                 inputProps={{ 'aria-label': 'search' }}
@@ -1451,15 +1491,15 @@ export default function DashboardLayout({ children, title, menuItems }) {
 
             <IconButton
               sx={{
-                color: '#718096',
-                backgroundColor: '#f8fafc',
+                color: colors.textPrimary,
+                backgroundColor: alpha('#ffffff', 0.9),
                 borderRadius: '5px',
-                border: '1px solid rgba(0,0,0,0.08)',
+                border: `1px solid ${alpha('#ffffff', 0.3)}`,
                 width: 32,
                 height: 32,
                 '&:hover': {
-                  backgroundColor: '#edf2f7',
-                  color: '#3182ce',
+                  backgroundColor: alpha('#ffffff', 0.95),
+                  color: colors.primary,
                 },
               }}
             >
@@ -1483,10 +1523,10 @@ export default function DashboardLayout({ children, title, menuItems }) {
               sx={{
                 p: 0.5,
                 borderRadius: '5px',
-                border: '1px solid rgba(0,0,0,0.08)',
-                backgroundColor: '#f8fafc',
+                border: `1px solid ${alpha('#ffffff', 0.3)}`,
+                backgroundColor: alpha('#ffffff', 0.9),
                 '&:hover': {
-                  backgroundColor: '#edf2f7',
+                  backgroundColor: alpha('#ffffff', 0.95),
                 },
               }}
             >
@@ -1494,8 +1534,8 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 sx={{
                   width: 28,
                   height: 28,
-                  bgcolor: '#3182ce',
-                  color: '#ffffff',
+                  bgcolor: colors.primary,
+                  color: colors.white,
                   fontSize: '0.75rem',
                   fontWeight: 600,
                 }}
@@ -1512,18 +1552,19 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 sx: {
                   mt: 0.5,
                   minWidth: 160,
-                  backgroundColor: '#ffffff',
-                  color: '#2d3748',
-                  border: '1px solid rgba(0,0,0,0.1)',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                  backgroundColor: colors.appBarBg,
+                  backdropFilter: 'blur(10px)',
+                  color: colors.textPrimary,
+                  border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
                   '& .MuiMenuItem-root': {
                     fontSize: '0.8rem',
                     py: 0.5,
                     px: 1.25,
-                    color: '#4a5568',
+                    color: colors.textPrimary,
                     '&:hover': {
-                      backgroundColor: '#f7fafc',
-                      color: '#2d3748',
+                      backgroundColor: alpha('#ffffff', 0.15),
+                      color: colors.primary,
                     },
                     '& .MuiListItemIcon-root': {
                       color: 'inherit',
@@ -1538,7 +1579,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
               <Box sx={{
                 px: 1.25,
                 py: 0.75,
-                borderBottom: '1px solid rgba(0,0,0,0.06)',
+                borderBottom: `1px solid ${alpha('#ffffff', 0.2)}`,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1,
@@ -1547,8 +1588,8 @@ export default function DashboardLayout({ children, title, menuItems }) {
                   sx={{
                     width: 32,
                     height: 32,
-                    bgcolor: '#3182ce',
-                    color: '#ffffff',
+                    bgcolor: colors.primary,
+                    color: colors.white,
                     fontSize: '0.75rem',
                     fontWeight: 600,
                   }}
@@ -1558,14 +1599,14 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 <Box>
                   <Typography variant="subtitle2" sx={{
                     fontWeight: 600,
-                    color: '#2d3748',
+                    color: colors.textPrimary,
                     fontSize: '0.8rem',
                     lineHeight: 1.2,
                   }}>
                     {user?.name || 'Jenny Wilson'}
                   </Typography>
                   <Typography variant="caption" sx={{
-                    color: '#718096',
+                    color: alpha(colors.textPrimary, 0.7),
                     fontSize: '0.7rem',
                     lineHeight: 1.2,
                   }}>
@@ -1575,19 +1616,19 @@ export default function DashboardLayout({ children, title, menuItems }) {
               </Box>
               <MenuItem onClick={handleProfileClick}>
                 <ListItemIcon>
-                  <User size={16} />
+                  <User size={16} color={colors.textPrimary} />
                 </ListItemIcon>
-                <Typography sx={{ fontSize: '0.8rem' }}>Profile</Typography>
+                <Typography sx={{ fontSize: '0.8rem', color: 'inherit' }}>Profile</Typography>
               </MenuItem>
               <Divider sx={{
                 my: 0.5,
-                borderColor: 'rgba(0,0,0,0.06)',
+                borderColor: alpha('#ffffff', 0.2),
               }} />
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
-                  <LogOut size={16} />
+                  <LogOut size={16} color={colors.textPrimary} />
                 </ListItemIcon>
-                <Typography sx={{ fontSize: '0.8rem' }}>Logout</Typography>
+                <Typography sx={{ fontSize: '0.8rem', color: 'inherit' }}>Logout</Typography>
               </MenuItem>
             </Menu>
           </DesktopActionsContainer>
@@ -1599,15 +1640,15 @@ export default function DashboardLayout({ children, title, menuItems }) {
 
             <IconButton
               sx={{
-                color: '#718096',
-                backgroundColor: '#f8fafc',
+                color: colors.textPrimary,
+                backgroundColor: alpha('#ffffff', 0.9),
                 borderRadius: '5px',
-                border: '1px solid rgba(0,0,0,0.08)',
+                border: `1px solid ${alpha('#ffffff', 0.3)}`,
                 width: 32,
                 height: 32,
                 '&:hover': {
-                  backgroundColor: '#edf2f7',
-                  color: '#3182ce',
+                  backgroundColor: alpha('#ffffff', 0.95),
+                  color: colors.primary,
                 },
               }}
             >
@@ -1631,10 +1672,10 @@ export default function DashboardLayout({ children, title, menuItems }) {
               sx={{
                 p: 0.5,
                 borderRadius: '5px',
-                border: '1px solid rgba(0,0,0,0.08)',
-                backgroundColor: '#f8fafc',
+                border: `1px solid ${alpha('#ffffff', 0.3)}`,
+                backgroundColor: alpha('#ffffff', 0.9),
                 '&:hover': {
-                  backgroundColor: '#edf2f7',
+                  backgroundColor: alpha('#ffffff', 0.95),
                 },
               }}
             >
@@ -1642,8 +1683,8 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 sx={{
                   width: 28,
                   height: 28,
-                  bgcolor: '#3182ce',
-                  color: '#ffffff',
+                  bgcolor: colors.primary,
+                  color: colors.white,
                   fontSize: '0.75rem',
                   fontWeight: 600,
                 }}
@@ -1660,18 +1701,19 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 sx: {
                   mt: 0.5,
                   minWidth: 160,
-                  backgroundColor: '#ffffff',
-                  color: '#2d3748',
-                  border: '1px solid rgba(0,0,0,0.1)',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                  backgroundColor: colors.appBarBg,
+                  backdropFilter: 'blur(10px)',
+                  color: colors.textPrimary,
+                  border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
                   '& .MuiMenuItem-root': {
                     fontSize: '0.8rem',
                     py: 0.5,
                     px: 1.25,
-                    color: '#4a5568',
+                    color: colors.textPrimary,
                     '&:hover': {
-                      backgroundColor: '#f7fafc',
-                      color: '#2d3748',
+                      backgroundColor: alpha('#ffffff', 0.15),
+                      color: colors.primary,
                     },
                     '& .MuiListItemIcon-root': {
                       color: 'inherit',
@@ -1686,7 +1728,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
               <Box sx={{
                 px: 1.25,
                 py: 0.75,
-                borderBottom: '1px solid rgba(0,0,0,0.06)',
+                borderBottom: `1px solid ${alpha('#ffffff', 0.2)}`,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1,
@@ -1695,8 +1737,8 @@ export default function DashboardLayout({ children, title, menuItems }) {
                   sx={{
                     width: 32,
                     height: 32,
-                    bgcolor: '#3182ce',
-                    color: '#ffffff',
+                    bgcolor: colors.primary,
+                    color: colors.white,
                     fontSize: '0.75rem',
                     fontWeight: 600,
                   }}
@@ -1706,14 +1748,14 @@ export default function DashboardLayout({ children, title, menuItems }) {
                 <Box>
                   <Typography variant="subtitle2" sx={{
                     fontWeight: 600,
-                    color: '#2d3748',
+                    color: colors.textPrimary,
                     fontSize: '0.8rem',
                     lineHeight: 1.2,
                   }}>
                     {user?.name || 'Jenny Wilson'}
                   </Typography>
                   <Typography variant="caption" sx={{
-                    color: '#718096',
+                    color: alpha(colors.textPrimary, 0.7),
                     fontSize: '0.7rem',
                     lineHeight: 1.2,
                   }}>
@@ -1723,19 +1765,19 @@ export default function DashboardLayout({ children, title, menuItems }) {
               </Box>
               <MenuItem onClick={handleProfileClick}>
                 <ListItemIcon>
-                  <User size={16} />
+                  <User size={16} color={colors.textPrimary} />
                 </ListItemIcon>
-                <Typography sx={{ fontSize: '0.8rem' }}>Profile</Typography>
+                <Typography sx={{ fontSize: '0.8rem', color: 'inherit' }}>Profile</Typography>
               </MenuItem>
               <Divider sx={{
                 my: 0.5,
-                borderColor: 'rgba(0,0,0,0.06)',
+                borderColor: alpha('#ffffff', 0.2),
               }} />
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
-                  <LogOut size={16} />
+                  <LogOut size={16} color={colors.textPrimary} />
                 </ListItemIcon>
-                <Typography sx={{ fontSize: '0.8rem' }}>Logout</Typography>
+                <Typography sx={{ fontSize: '0.8rem', color: 'inherit' }}>Logout</Typography>
               </MenuItem>
             </Menu>
           </MobileActionsContainer>
@@ -1749,8 +1791,9 @@ export default function DashboardLayout({ children, title, menuItems }) {
           left: 0,
           right: 0,
           zIndex: theme.zIndex.appBar + 2,
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid rgba(0,0,0,0.08)',
+          backgroundColor: colors.appBarBg,
+          backdropFilter: 'blur(10px)',
+          borderBottom: `1px solid ${alpha('#ffffff', 0.2)}`,
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
           animation: 'slideDown 0.2s ease-out',
           '@keyframes slideDown': {
@@ -1769,7 +1812,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
             gap: 1,
           }}>
             <SearchContainer sx={{ flex: 1 }}>
-              <Search size={16} color="#a0aec0" />
+              <Search size={16} color={alpha(colors.textPrimary, 0.7)} />
               <SearchInput
                 placeholder="Search everything..."
                 inputProps={{ 'aria-label': 'search' }}
@@ -1780,15 +1823,15 @@ export default function DashboardLayout({ children, title, menuItems }) {
             <IconButton
               onClick={handleMobileSearchClose}
               sx={{
-                color: '#718096',
-                backgroundColor: '#f8fafc',
+                color: colors.textPrimary,
+                backgroundColor: alpha('#ffffff', 0.9),
                 borderRadius: '5px',
-                border: '1px solid rgba(0,0,0,0.08)',
+                border: `1px solid ${alpha('#ffffff', 0.3)}`,
                 width: 32,
                 height: 32,
                 '&:hover': {
-                  backgroundColor: '#edf2f7',
-                  color: '#3182ce',
+                  backgroundColor: alpha('#ffffff', 0.95),
+                  color: colors.primary,
                 },
               }}
             >
@@ -1808,11 +1851,11 @@ export default function DashboardLayout({ children, title, menuItems }) {
             disableScrollLock: true,
           }}
           sx={{
-            zIndex: theme.zIndex.appBar + (mobileSearchOpen ? 2 : 1),
+            zIndex: theme.zIndex.appBar + (mobileSearchOpen ? 2 : 1) + (hoverMenuOpen ? 1 : 0),
             '& .MuiDrawer-paper': {
               width: mobileDrawerWidth,
-              backgroundImage: 'linear-gradient(135deg, #1a365d 0%, #2c5282 100%)',
-              borderRight: 'none',
+              backgroundColor: colors.drawerBg,
+              borderRight: `1px solid ${colors.borderLight}`,
               '&::-webkit-scrollbar': {
                 display: 'none',
               },
@@ -1859,10 +1902,10 @@ export default function DashboardLayout({ children, title, menuItems }) {
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: '#ffffff',
+              backgroundColor: colors.white,
               borderRadius: '6px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              border: '1px solid rgba(0,0,0,0.04)',
+              border: `1px solid ${colors.borderLight}`,
               overflow: 'hidden',
             }}
           >
@@ -1897,8 +1940,8 @@ export default function DashboardLayout({ children, title, menuItems }) {
         </Box>
 
         <Box sx={{
-          borderTop: '1px solid rgba(0,0,0,0.04)',
-          backgroundColor: '#ffffff',
+          borderTop: `1px solid ${colors.borderLight}`,
+          backgroundColor: colors.white,
           py: 1,
           px: { xs: 1.25, sm: 2 }
         }}>

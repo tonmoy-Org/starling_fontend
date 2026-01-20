@@ -227,7 +227,6 @@ const Locates = () => {
     const [singleRestoreDialogOpen, setSingleRestoreDialogOpen] = useState(false);
     const [singleDeleteDialogOpen, setSingleDeleteDialogOpen] = useState(false);
     const [selectedSingleItem, setSelectedSingleItem] = useState(null);
-    const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
 
     const [snackbar, setSnackbar] = useState({
         open: false,
@@ -497,30 +496,6 @@ const Locates = () => {
         onError: (err) => {
             console.error('Bulk permanent delete error:', err);
             showSnackbar(err?.response?.data?.message || 'Bulk permanent delete failed', 'error');
-        },
-    });
-
-    const clearAllRecycleBinMutation = useMutation({
-        mutationFn: async () => {
-            const deletedItems = deletedHistoryData.filter(item =>
-                item.is_deleted === true
-            );
-
-            const promises = deletedItems.map(item =>
-                axiosInstance.delete(`/locates/${item.id}/`)
-            );
-            const responses = await Promise.all(promises);
-            return responses.map(r => r.data);
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-            setSelectedRecycleBinItems(new Set());
-            setClearAllDialogOpen(false);
-            showSnackbar('Recycle bin cleared', 'success');
-        },
-        onError: (err) => {
-            console.error('Clear all error:', err);
-            showSnackbar(err?.response?.data?.message || 'Clear all failed', 'error');
         },
     });
 
@@ -817,15 +792,6 @@ const Locates = () => {
 
     const executeBulkPermanentDelete = () => {
         bulkPermanentDeleteMutation.mutate(Array.from(selectedRecycleBinItems));
-    };
-
-    const confirmClearAllRecycleBin = () => {
-        if (recycleBinItems.length === 0) return;
-        setClearAllDialogOpen(true);
-    };
-
-    const executeClearAllRecycleBin = () => {
-        clearAllRecycleBinMutation.mutate();
     };
 
     const handleSingleRestore = (item) => {
@@ -1149,7 +1115,7 @@ const Locates = () => {
                                     fontSize: '0.85rem',
                                     color: GRAY_COLOR,
                                 }}>
-                                    {recycleBinItems.length} deleted item(s) • Restore or permanently delete (Times in PST)
+                                    {recycleBinItems.length} deleted item(s) • Restore or permanently delete
                                 </Typography>
                             </Box>
                         </Box>
@@ -1266,25 +1232,6 @@ const Locates = () => {
                                 }}
                             >
                                 Delete ({selectedRecycleBinItems.size})
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<Trash2 size={14} />}
-                                onClick={confirmClearAllRecycleBin}
-                                disabled={recycleBinItems.length === 0 || clearAllRecycleBinMutation.isPending}
-                                sx={{
-                                    textTransform: 'none',
-                                    fontSize: '0.75rem',
-                                    color: RED_COLOR,
-                                    borderColor: alpha(RED_COLOR, 0.3),
-                                    '&:hover': {
-                                        borderColor: RED_COLOR,
-                                        backgroundColor: alpha(RED_COLOR, 0.05),
-                                    },
-                                }}
-                            >
-                                Clear All ({recycleBinItems.length})
                             </Button>
                         </Box>
                     </Box>
@@ -1495,139 +1442,6 @@ const Locates = () => {
                     )}
                 </Box>
             </Modal>
-
-            <Dialog
-                open={clearAllDialogOpen}
-                onClose={() => setClearAllDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                    }
-                }}
-            >
-                <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                    pb: 1.5,
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: alpha(RED_COLOR, 0.1),
-                            color: RED_COLOR,
-                        }}>
-                            <Trash2 size={18} />
-                        </Box>
-                        <Box>
-                            <Typography variant="h6" sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.95rem',
-                                fontWeight: 600,
-                                lineHeight: 1.2,
-                            }}>
-                                Clear All Recycle Bin
-                            </Typography>
-                            <Typography variant="caption" sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}>
-                                Permanently delete all items from recycle bin
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogTitle>
-                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            mb: 2,
-                        }}
-                    >
-                        Are you sure you want to permanently delete <strong>{recycleBinItems.length} item(s)</strong> from the recycle bin?
-                    </Typography>
-                    <Box sx={{
-                        p: 1.5,
-                        borderRadius: '6px',
-                        backgroundColor: alpha(RED_COLOR, 0.05),
-                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 1.5,
-                    }}>
-                        <AlertTriangle size={18} color={RED_COLOR} />
-                        <Box>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: RED_COLOR,
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    mb: 0.5,
-                                }}
-                            >
-                                Warning: This action cannot be undone
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 400,
-                                }}
-                            >
-                                All items will be permanently deleted and cannot be recovered. This includes all selected and unselected items in the recycle bin.
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 1.5 }}>
-                    <Button
-                        onClick={() => setClearAllDialogOpen(false)}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={executeClearAllRecycleBin}
-                        variant="contained"
-                        color="error"
-                        startIcon={<Trash2 size={16} />}
-                        disabled={clearAllRecycleBinMutation.isPending}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: RED_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(RED_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        {clearAllRecycleBinMutation.isPending ? 'Clearing...' : 'Clear All Permanently'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
 
             <Dialog
                 open={singleRestoreDialogOpen}

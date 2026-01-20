@@ -206,7 +206,7 @@ const PDFViewerModal = ({ open, onClose, pdfUrl }) => {
                                 fontSize: '0.85rem',
                                 color: GRAY_COLOR,
                             }}>
-                                Last Locked Report (Times in PST)
+                                Last Locked Report
                             </Typography>
                         </Box>
                     </Box>
@@ -1195,7 +1195,7 @@ const RMEReports = () => {
                             fontWeight: 400,
                         }}
                     >
-                        Track RME reports through 3 stages: Unverified → Holding → Finalized (Times in Pacific Time)
+                        Track RME reports through 3 stages: Unverified → Holding → Finalized
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1232,7 +1232,7 @@ const RMEReports = () => {
                     setDeleteDialogOpen(true);
                 }}
                 icon={<FileSpreadsheet size={20} />}
-                subtitle="New reports awaiting verification (Times in PST)"
+                subtitle="New reports awaiting verification"
                 additionalActions={
                     <Stack direction="row" spacing={1} alignItems="center">
                         <SearchInput
@@ -1312,7 +1312,7 @@ const RMEReports = () => {
                     setDeleteDialogOpen(true);
                 }}
                 icon={<AlertOctagon size={20} />}
-                subtitle="Reports on hold pending additional information (Times in PST)"
+                subtitle="Reports on hold pending additional information"
                 additionalActions={
                     <Stack direction="row" spacing={1} alignItems="center">
                         <SearchInput
@@ -1375,7 +1375,7 @@ const RMEReports = () => {
                     setDeleteDialogOpen(true);
                 }}
                 icon={<CheckCircle size={20} />}
-                subtitle="Completed reports (Times in PST)"
+                subtitle="Completed reports"
                 additionalActions={
                     <Stack direction="row" spacing={1} alignItems="center">
                         <SearchInput
@@ -1463,7 +1463,7 @@ const RMEReports = () => {
                                     fontSize: '0.85rem',
                                     color: GRAY_COLOR,
                                 }}>
-                                    {deletedWorkOrders.length} deleted item(s) • Restore or permanently delete (Times in PST)
+                                    {deletedWorkOrders.length} deleted item(s) • Restore or permanently delete
                                 </Typography>
                             </Box>
                         </Box>

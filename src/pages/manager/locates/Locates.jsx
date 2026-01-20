@@ -30,11 +30,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
 import axiosInstance from '../../../api/axios';
+import { useAuth } from '../../../auth/AuthProvider';
 import {
-    format as formatDateFns,
     addBusinessDays,
     addHours,
-    isBefore,
     isWeekend,
     addDays,
 } from 'date-fns';
@@ -67,10 +66,8 @@ const ORANGE_COLOR = '#ed6c02';
 const GRAY_COLOR = '#6b7280';
 const PURPLE_COLOR = '#8b5cf6';
 
-// Define the timezone
-const TIMEZONE = 'America/Los_Angeles'; // GMT-8 (Pacific Time)
+const TIMEZONE = 'America/Los_Angeles';
 
-// Helper function to convert date to Pacific Time
 const toPacificTime = (dateString) => {
     if (!dateString) return null;
     try {
@@ -82,7 +79,6 @@ const toPacificTime = (dateString) => {
     }
 };
 
-// Updated date formatting functions in Pacific Time
 const formatDate = (dateString) => {
     const date = toPacificTime(dateString);
     if (!date) return '—';
@@ -95,22 +91,10 @@ const formatDateShort = (dateString) => {
     return formatTZ(date, 'MMM dd, HH:mm', { timeZone: TIMEZONE });
 };
 
-const formatDateOnly = (dateString) => {
-    const date = toPacificTime(dateString);
-    if (!date) return '—';
-    return formatTZ(date, 'MMM dd, yyyy', { timeZone: TIMEZONE });
-};
-
 const formatMonthDay = (dateString) => {
     const date = toPacificTime(dateString);
     if (!date) return '—';
     return formatTZ(date, 'MMM dd', { timeZone: TIMEZONE });
-};
-
-const formatDateTime = (dateString) => {
-    const date = toPacificTime(dateString);
-    if (!date) return '—';
-    return formatTZ(date, 'MMM dd, yyyy HH:mm:ss', { timeZone: TIMEZONE });
 };
 
 const formatEmergencyCountdown = (remainingMs) => {
@@ -171,22 +155,17 @@ const parseDashboardAddress = (fullAddress) => {
     };
 };
 
-// Function to format target work date from scheduledDateRaw in Pacific Time
 const formatTargetWorkDate = (scheduledDateRaw) => {
     if (!scheduledDateRaw || scheduledDateRaw === 'ASAP') return 'ASAP';
 
     try {
-        // Example: "01/19/2026 8:00 AM - 5:15 PM"
         const datePart = scheduledDateRaw.split(' ')[0];
         if (!datePart) return 'ASAP';
 
         const [month, day, year] = datePart.split('/').map(Number);
         if (!month || !day || !year) return 'ASAP';
 
-        // ✅ Create LOCAL date (no UTC, no timezone conversion)
         const date = new Date(year, month - 1, day);
-
-        // ✅ Just format the date
         return formatTZ(date, 'MMM dd, yyyy');
     } catch (e) {
         console.error('Error formatting target work date:', e);
@@ -194,9 +173,30 @@ const formatTargetWorkDate = (scheduledDateRaw) => {
     }
 };
 
+const shouldExpireTimer = (calledAt, callType) => {
+    if (!calledAt || !callType) return false;
+
+    const calledDate = toPacificTime(calledAt);
+    const now = toZonedTime(new Date(), TIMEZONE);
+
+    if (callType === 'EMERGENCY' || callType === 'Emergency') {
+        const fourHoursLater = addHours(calledDate, 4);
+        return now >= fourHoursLater;
+    } else if (callType === 'STANDARD' || callType === 'Standard') {
+        const twoBusinessDaysLater = addBusinessDays(calledDate, 2);
+        return now >= twoBusinessDaysLater;
+    }
+
+    return false;
+};
 
 const Locates = () => {
     const queryClient = useQueryClient();
+    const { user } = useAuth();
+
+    const currentUserName = user?.name || 'Admin User';
+    const currentUserEmail = user?.email || 'admin@company.com';
+
     const [currentTime, setCurrentTime] = useState(() => toZonedTime(new Date(), TIMEZONE));
 
     const [selectedPending, setSelectedPending] = useState(new Set());
@@ -235,7 +235,6 @@ const Locates = () => {
         severity: 'success',
     });
 
-    // Real-time updates for recycle bin count
     const [recycleBinCount, setRecycleBinCount] = useState(0);
 
     useEffect(() => {
@@ -246,38 +245,68 @@ const Locates = () => {
         return () => clearInterval(timer);
     }, []);
 
-    // Updated query with correct API endpoint
     const { data: rawData = [], isLoading, refetch } = useQuery({
         queryKey: ['locates-all'],
         queryFn: async () => {
-            const res = await axiosInstance.get('/all-locates/');
+            const res = await axiosInstance.get('/locates/');
             return Array.isArray(res.data) ? res.data : res.data?.data || [];
-        },
-        staleTime: 30000, // 30 seconds
-        refetchInterval: 60000, // Refetch every minute for real-time updates
-    });
-
-    console.log('Fetched locates data:', rawData);
-
-    // Optimized recycle bin query with polling - updated endpoint
-    const { data: deletedHistoryData = {}, isLoading: isRecycleBinLoading, refetch: refetchRecycleBin } = useQuery({
-        queryKey: ['locates-deleted-history'],
-        queryFn: async () => {
-            const res = await axiosInstance.get('/deleted-history/');
-            return res.data || {};
         },
         staleTime: 30000,
         refetchInterval: 60000,
     });
 
-    // Update recycle bin count whenever data changes
     useEffect(() => {
-        if (deletedHistoryData.data) {
-            const filtered = deletedHistoryData.data.filter(item => !item.isPermanentlyDeleted);
-            setRecycleBinCount(filtered.length);
-        } else if (deletedHistoryData.deleted_work_orders) {
-            const filtered = deletedHistoryData.deleted_work_orders.filter(item => !item.is_permanently_deleted);
-            setRecycleBinCount(filtered.length);
+        const checkExpiredTimers = () => {
+            const now = toZonedTime(new Date(), TIMEZONE);
+            const expiredItems = rawData.filter(item =>
+                item.locates_called &&
+                item.called_at &&
+                item.call_type &&
+                shouldExpireTimer(item.called_at, item.call_type)
+            );
+
+            if (expiredItems.length > 0) {
+                expiredItems.forEach(async (item) => {
+                    try {
+                        await axiosInstance.patch(`/locates/${item.id}/`, {
+                            timer_expired: true,
+                            time_remaining: 'EXPIRED',
+                        });
+                    } catch (error) {
+                        console.error('Error auto-updating expired timer:', error);
+                    }
+                });
+
+                if (expiredItems.length > 0) {
+                    queryClient.invalidateQueries({ queryKey: ['locates-all'] });
+                }
+            }
+        };
+
+        const interval = setInterval(checkExpiredTimers, 60000);
+        return () => clearInterval(interval);
+    }, [rawData, queryClient]);
+
+    const { data: deletedHistoryData = [], isLoading: isRecycleBinLoading, refetch: refetchRecycleBin } = useQuery({
+        queryKey: ['locates-deleted-history'],
+        queryFn: async () => {
+            try {
+                const res = await axiosInstance.get('/locates/');
+                const allData = Array.isArray(res.data) ? res.data : res.data?.data || [];
+                const deletedItems = allData.filter(item => item.is_deleted === true);
+                return deletedItems;
+            } catch (error) {
+                console.error('Error fetching deleted history:', error);
+                return [];
+            }
+        },
+        staleTime: 30000,
+        refetchInterval: 60000,
+    });
+
+    useEffect(() => {
+        if (deletedHistoryData && Array.isArray(deletedHistoryData)) {
+            setRecycleBinCount(deletedHistoryData.length);
         }
     }, [deletedHistoryData]);
 
@@ -289,11 +318,16 @@ const Locates = () => {
     const markCalledMutation = useMutation({
         mutationFn: async ({ id, callType }) => {
             const response = await axiosInstance.patch(
-                `/work-order/${id}/update-call-status/`,
+                `/locates/${id}/`,
                 {
                     locates_called: true,
-                    call_type: callType,
+                    call_type: callType === 'STANDARD' ? 'Standard' : 'Emergency',
                     called_at: new Date().toISOString(),
+                    called_by: currentUserName,
+                    called_by_email: currentUserEmail,
+                    timer_started: true,
+                    timer_expired: false,
+                    time_remaining: callType === 'STANDARD' ? '2 business days' : '4 hours',
                 }
             );
             return response.data;
@@ -308,30 +342,47 @@ const Locates = () => {
     });
 
     const softDeleteBulkMutation = useMutation({
-        mutationFn: (ids) =>
-            axiosInstance.delete('/work-order/bulk-delete/', { data: { ids: Array.from(ids) } }),
+        mutationFn: async (ids) => {
+            const promises = Array.from(ids).map(id =>
+                axiosInstance.patch(`/locates/${id}/`, {
+                    is_deleted: true,
+                    deleted_date: new Date().toISOString(),
+                    deleted_by: currentUserName,
+                    deleted_by_email: currentUserEmail,
+                })
+            );
+            const responses = await Promise.all(promises);
+            return responses.map(r => r.data);
+        },
         onSuccess: () => {
             invalidateAndRefetch();
             setSelectedPending(new Set());
             setSelectedInProgress(new Set());
             setSelectedCompleted(new Set());
-            if (recycleBinOpen) {
-                refetchRecycleBin();
-            }
+            setSelectedForDeletion(new Set());
+            setDeleteDialogOpen(false);
             showSnackbar('Selected items moved to recycle bin', 'success');
         },
-        onError: (err) => showSnackbar(err?.response?.data?.message || 'Delete failed', 'error'),
+        onError: (err) => {
+            console.error('Soft delete error:', err);
+            showSnackbar(err?.response?.data?.message || 'Delete failed', 'error');
+        },
     });
 
     const completeWorkOrderManuallyMutation = useMutation({
         mutationFn: async (id) => {
-            const response = await axiosInstance.patch(`/work-order/${id}/complete/`);
+            const response = await axiosInstance.patch(`/locates/${id}/`, {
+                timer_expired: true,
+                time_remaining: 'COMPLETED',
+                completed_at: new Date().toISOString(),
+            });
             return response.data;
         },
         onSuccess: () => {
             invalidateAndRefetch();
             setSelectedForCompletion(new Set());
             setSelectedInProgress(new Set());
+            setCompleteDialogOpen(false);
             showSnackbar('Work order marked as complete', 'success');
         },
         onError: (err) => {
@@ -342,7 +393,11 @@ const Locates = () => {
     const bulkCompleteWorkOrdersMutation = useMutation({
         mutationFn: async (ids) => {
             const promises = Array.from(ids).map(id =>
-                axiosInstance.patch(`/work-order/${id}/complete/`)
+                axiosInstance.patch(`/locates/${id}/`, {
+                    timer_expired: true,
+                    time_remaining: 'COMPLETED',
+                    completed_at: new Date().toISOString(),
+                })
             );
             const responses = await Promise.all(promises);
             return responses.map(r => r.data);
@@ -351,6 +406,7 @@ const Locates = () => {
             invalidateAndRefetch();
             setSelectedForCompletion(new Set());
             setSelectedInProgress(new Set());
+            setCompleteDialogOpen(false);
             showSnackbar(`${responses.length} work order(s) marked as complete`, 'success');
         },
         onError: (err) => {
@@ -359,171 +415,186 @@ const Locates = () => {
     });
 
     const restoreFromRecycleBinMutation = useMutation({
-        mutationFn: async ({ dashboardId, deletedOrderId }) => {
-            const response = await axiosInstance.post(
-                `/history/${dashboardId}/${deletedOrderId}/restore/`
-            );
+        mutationFn: async (id) => {
+            const response = await axiosInstance.patch(`/locates/${id}/`, {
+                is_deleted: false,
+                deleted_date: null,
+                deleted_by: '',
+                deleted_by_email: '',
+            });
             return response.data;
         },
         onSuccess: () => {
             invalidateAndRefetch();
-            refetchRecycleBin();
             setSelectedRecycleBinItems(new Set());
             setSingleRestoreDialogOpen(false);
+            setSelectedSingleItem(null);
             showSnackbar('Item restored successfully', 'success');
         },
         onError: (err) => {
+            console.error('Restore error:', err);
             showSnackbar(err?.response?.data?.message || 'Restore failed', 'error');
         },
     });
 
     const bulkRestoreMutation = useMutation({
-        mutationFn: async (items) => {
-            const promises = items.map(item =>
-                axiosInstance.post(`/history/${item.dashboardId}/${item.deletedOrderId}/restore/`)
+        mutationFn: async (ids) => {
+            const promises = ids.map(id =>
+                axiosInstance.patch(`/locates/${id}/`, {
+                    is_deleted: false,
+                    deleted_date: null,
+                    deleted_by: '',
+                    deleted_by_email: '',
+                })
             );
             const responses = await Promise.all(promises);
             return responses.map(r => r.data);
         },
         onSuccess: (responses) => {
             invalidateAndRefetch();
-            refetchRecycleBin();
             setSelectedRecycleBinItems(new Set());
+            setRestoreDialogOpen(false);
             showSnackbar(`${responses.length} item(s) restored`, 'success');
         },
         onError: (err) => {
+            console.error('Bulk restore error:', err);
             showSnackbar(err?.response?.data?.message || 'Bulk restore failed', 'error');
         },
     });
 
     const permanentDeleteFromRecycleBinMutation = useMutation({
-        mutationFn: async ({ dashboardId, deletedOrderId }) => {
-            const response = await axiosInstance.delete(
-                `/history/${dashboardId}/${deletedOrderId}/permanent/`
-            );
+        mutationFn: async (id) => {
+            const response = await axiosInstance.delete(`/locates/${id}/`);
             return response.data;
         },
         onSuccess: () => {
-            refetchRecycleBin();
+            invalidateAndRefetch();
             setSelectedRecycleBinItems(new Set());
             setSingleDeleteDialogOpen(false);
+            setSelectedSingleItem(null);
             showSnackbar('Item permanently deleted', 'success');
         },
         onError: (err) => {
+            console.error('Permanent delete error:', err);
             showSnackbar(err?.response?.data?.message || 'Permanent delete failed', 'error');
         },
     });
 
     const bulkPermanentDeleteMutation = useMutation({
-        mutationFn: async (items) => {
-            const response = await axiosInstance.delete('/history/bulk-permanent-delete/', {
-                data: { items }
-            });
-            return response.data;
+        mutationFn: async (ids) => {
+            const promises = ids.map(id =>
+                axiosInstance.delete(`/locates/${id}/`)
+            );
+            const responses = await Promise.all(promises);
+            return responses.map(r => r.data);
         },
-        onSuccess: (data) => {
-            refetchRecycleBin();
+        onSuccess: (responses) => {
+            invalidateAndRefetch();
             setSelectedRecycleBinItems(new Set());
-            showSnackbar(`${data.deletedCount || items.length} item(s) permanently deleted`, 'success');
+            setPermanentDeleteDialogOpen(false);
+            showSnackbar(`${responses.length} item(s) permanently deleted`, 'success');
         },
         onError: (err) => {
+            console.error('Bulk permanent delete error:', err);
             showSnackbar(err?.response?.data?.message || 'Bulk permanent delete failed', 'error');
         },
     });
 
     const clearAllRecycleBinMutation = useMutation({
         mutationFn: async () => {
-            const response = await axiosInstance.delete('/history/clear-all/');
-            return response.data;
+            const deletedItems = deletedHistoryData.filter(item =>
+                item.is_deleted === true
+            );
+
+            const promises = deletedItems.map(item =>
+                axiosInstance.delete(`/locates/${item.id}/`)
+            );
+            const responses = await Promise.all(promises);
+            return responses.map(r => r.data);
         },
         onSuccess: () => {
-            refetchRecycleBin();
+            invalidateAndRefetch();
             setSelectedRecycleBinItems(new Set());
             setClearAllDialogOpen(false);
             showSnackbar('Recycle bin cleared', 'success');
         },
         onError: (err) => {
+            console.error('Clear all error:', err);
             showSnackbar(err?.response?.data?.message || 'Clear all failed', 'error');
         },
     });
 
     const processed = useMemo(() => {
-        // Extract all work orders from all dashboards
-        const allWorkOrders = [];
+        return rawData
+            .filter(item => !item.is_deleted) // Filter out soft-deleted items
+            .map(item => {
+                const addr = parseDashboardAddress(item.customer_address || '');
+                const isEmergency = (item.call_type || '').toUpperCase().includes('EMERGENCY');
+                const type = isEmergency ? 'EMERGENCY' : 'STANDARD';
 
-        rawData.forEach(dashboard => {
-            if (dashboard.work_orders && Array.isArray(dashboard.work_orders)) {
-                dashboard.work_orders.forEach(wo => {
-                    const addr = parseDashboardAddress(wo.customer_address || '');
-                    const isEmergency = (wo.type || wo.priority_name || '').toUpperCase().includes('EMERGENCY');
-                    const type = isEmergency ? 'EMERGENCY' : 'STANDARD';
+                let completionDate = null;
+                let timeRemainingText = '';
+                let timeRemainingDetail = '';
+                let timeRemainingColor = TEXT_COLOR;
+                let isExpired = false;
 
-                    let completionDate = null;
-                    let timeRemainingText = '';
-                    let timeRemainingDetail = '';
-                    let timeRemainingColor = TEXT_COLOR;
-                    let isExpired = false;
+                const calledByName = item.called_by || '';
+                const calledByEmail = item.called_by_email || '';
 
-                    const calledByName = wo.called_by || wo.metadata?.updatedBy || '';
-                    const calledByEmail = wo.called_by_email || '';
+                if (item.locates_called && item.called_at && item.call_type) {
+                    const called = toPacificTime(item.called_at);
+                    const now = currentTime;
 
-                    // Handle completion date logic in Pacific Time
-                    if (wo.locates_called && wo.called_at && wo.call_type) {
-                        const called = toPacificTime(wo.called_at);
+                    if (called) {
+                        if (item.call_type === 'Emergency' || item.call_type === 'EMERGENCY') {
+                            completionDate = addHours(called, 4);
+                            const totalMs = 4 * 60 * 60 * 1000;
+                            const elapsedMs = now.getTime() - called.getTime();
+                            const remainingMs = Math.max(0, totalMs - elapsedMs);
 
-                        // Use the actual completion_date from API if available
-                        if (wo.completion_date) {
-                            completionDate = toPacificTime(wo.completion_date);
-                        } else if (called) {
-                            // Calculate based on call type if no completion date
-                            completionDate = wo.call_type === 'EMERGENCY'
-                                ? addHours(called, 4)
-                                : addBusinessDays(called, 2);
-                        }
-
-                        const now = currentTime;
-                        if (completionDate) {
-                            isExpired = isBefore(completionDate, now);
+                            isExpired = now >= completionDate;
 
                             if (!isExpired) {
-                                if (wo.call_type === 'EMERGENCY') {
-                                    const totalMs = 4 * 60 * 60 * 1000;
-                                    const elapsedMs = now.getTime() - called.getTime();
-                                    const remainingMs = Math.max(0, totalMs - elapsedMs);
+                                timeRemainingText = formatEmergencyCountdown(remainingMs);
+                                timeRemainingDetail = `Expires at: ${formatTZ(completionDate, 'MMM dd, HH:mm:ss', { timeZone: TIMEZONE })}`;
 
-                                    timeRemainingText = formatEmergencyCountdown(remainingMs);
-                                    timeRemainingDetail = `Expires at: ${formatTZ(completionDate, 'MMM dd, HH:mm:ss', { timeZone: TIMEZONE })}`;
-
-                                    if (remainingMs <= 30 * 60 * 1000) {
-                                        timeRemainingColor = RED_COLOR;
-                                    } else if (remainingMs <= 60 * 60 * 1000) {
-                                        timeRemainingColor = ORANGE_COLOR;
-                                    } else {
-                                        timeRemainingColor = BLUE_COLOR;
-                                    }
+                                if (remainingMs <= 30 * 60 * 1000) {
+                                    timeRemainingColor = RED_COLOR;
+                                } else if (remainingMs <= 60 * 60 * 1000) {
+                                    timeRemainingColor = ORANGE_COLOR;
                                 } else {
-                                    const businessInfo = getBusinessDaysRemaining(completionDate);
-                                    const now = currentTime;
-                                    const isBusinessDay = !isWeekend(now);
+                                    timeRemainingColor = BLUE_COLOR;
+                                }
+                            } else {
+                                timeRemainingText = 'EXPIRED';
+                                timeRemainingDetail = `Expired on: ${formatTZ(completionDate, 'MMM dd, yyyy HH:mm', { timeZone: TIMEZONE })}`;
+                                timeRemainingColor = RED_COLOR;
+                            }
+                        } else {
+                            completionDate = addBusinessDays(called, 2);
+                            const businessInfo = getBusinessDaysRemaining(completionDate);
+                            const isBusinessDay = !isWeekend(now);
 
-                                    if (businessInfo.days === 0 && isBusinessDay) {
-                                        const businessHoursRemaining = Math.max(0, 17 - now.getHours());
-                                        timeRemainingText = `${businessHoursRemaining}h remaining today`;
-                                    } else if (businessInfo.days === 1) {
-                                        timeRemainingText = `1 business day`;
-                                    } else {
-                                        timeRemainingText = `${businessInfo.days} business days`;
-                                    }
+                            isExpired = now >= completionDate;
 
-                                    timeRemainingDetail = `Expires: ${formatTZ(completionDate, 'MMM dd, yyyy', { timeZone: TIMEZONE })}`;
+                            if (!isExpired) {
+                                if (businessInfo.days === 0 && isBusinessDay) {
+                                    const businessHoursRemaining = Math.max(0, 17 - now.getHours());
+                                    timeRemainingText = `${businessHoursRemaining}h remaining today`;
+                                } else if (businessInfo.days === 1) {
+                                    timeRemainingText = `1 business day`;
+                                } else {
+                                    timeRemainingText = `${businessInfo.days} business days`;
+                                }
 
-                                    if (businessInfo.days === 0) {
-                                        timeRemainingColor = ORANGE_COLOR;
-                                    } else if (businessInfo.days <= 1) {
-                                        timeRemainingColor = ORANGE_COLOR;
-                                    } else {
-                                        timeRemainingColor = BLUE_COLOR;
-                                    }
+                                timeRemainingDetail = `Expires: ${formatTZ(completionDate, 'MMM dd, yyyy', { timeZone: TIMEZONE })}`;
+
+                                if (businessInfo.days === 0) {
+                                    timeRemainingColor = ORANGE_COLOR;
+                                } else if (businessInfo.days <= 1) {
+                                    timeRemainingColor = ORANGE_COLOR;
+                                } else {
+                                    timeRemainingColor = BLUE_COLOR;
                                 }
                             } else {
                                 timeRemainingText = 'EXPIRED';
@@ -532,119 +603,75 @@ const Locates = () => {
                             }
                         }
                     }
+                }
 
-                    // Format target work date from scheduledDateRaw
-                    const targetWorkDate = formatTargetWorkDate(wo.scheduled_date);
+                const targetWorkDate = formatTargetWorkDate(item.scheduled_date);
 
-                    // Format completion date properly in Pacific Time
-                    const formattedCompletionDate = wo.completion_date
-                        ? formatMonthDay(wo.completion_date)
-                        : completionDate
-                            ? formatMonthDay(completionDate)
-                            : '—';
-
-                    // Use scraped_at as the triggered date (fallback to created_date if not available)
-                    const triggeredDate = dashboard.scraped_at || wo.created_date || wo.requested_date || '';
-
-                    allWorkOrders.push({
-                        id: wo.id || `ext-${wo.work_order_number || Math.random().toString(36).slice(2, 9)}`,
-                        workOrderId: wo.id,
-                        jobId: wo.work_order_number || 'N/A',
-                        workOrderNumber: wo.work_order_number || '',
-                        customerName: wo.customer_name || 'Unknown',
-                        ...addr,
-                        type,
-                        techName: wo.tech_name || wo.technician || 'Unassigned',
-                        requestedDate: wo.created_date || wo.requested_date,
-                        completedAt: wo.completed_date,
-                        locatesCalled: !!wo.locates_called,
-                        callType: wo.call_type || null,
-                        calledByName,
-                        calledByEmail,
-                        calledAt: wo.called_at,
-                        completionDate: completionDate,
-                        formattedCompletionDate, // Add formatted completion date
-                        priorityName: wo.priority_name || 'Standard',
-                        priorityColor: wo.priority_color,
-                        needsCall: (wo.priority_name || '').toUpperCase() === 'EXCAVATOR',
-                        isExpired,
-                        timeRemainingText,
-                        timeRemainingDetail,
-                        timeRemainingColor,
-                        workflowStatus: wo.workflow_status || 'UNKNOWN',
-                        dashboardId: dashboard.id || null,
-                        // New fields for dates display in Pacific Time
-                        locateTriggeredDate: triggeredDate,
-                        locateCalledInDate: wo.called_at || '',
-                        clearToDigDate: wo.completion_date || '',
-                        targetWorkDate: targetWorkDate, // This will show like "Jan 18, 2026"
-                        scheduledDateRaw: wo.scheduled_date || 'ASAP',
-                        actualCompletionDate: wo.completion_date || '', // Store actual completion date
-                    });
-                });
-            }
-        });
-
-        return allWorkOrders;
+                return {
+                    id: item.id?.toString() || Math.random().toString(),
+                    workOrderId: item.id,
+                    jobId: item.work_order_number || 'N/A',
+                    workOrderNumber: item.work_order_number || '',
+                    customerName: item.customer_name || 'Unknown',
+                    ...addr,
+                    type,
+                    techName: item.tech_name || 'Unassigned',
+                    requestedDate: item.created_date,
+                    locatesCalled: !!item.locates_called,
+                    callType: item.call_type || null,
+                    calledByName,
+                    calledByEmail,
+                    calledAt: item.called_at,
+                    completionDate: completionDate,
+                    formattedCompletionDate: completionDate ? formatMonthDay(completionDate) : '—',
+                    priorityName: item.priority_name || 'Standard',
+                    priorityColor: item.priority_color,
+                    needsCall: (item.priority_name || '').toUpperCase() === 'EXCAVATOR',
+                    isExpired,
+                    timeRemainingText,
+                    timeRemainingDetail,
+                    timeRemainingColor,
+                    timerStarted: !!item.timer_started,
+                    timerExpired: !!item.timer_expired,
+                    timeRemainingApi: item.time_remaining || '',
+                    locateTriggeredDate: item.scraped_at,
+                    locateCalledInDate: item.called_at || '',
+                    clearToDigDate: item.completed_at || '',
+                    targetWorkDate: targetWorkDate,
+                    scheduledDateRaw: item.scheduled_date || 'ASAP',
+                    isDeleted: item.is_deleted === true,
+                    deletedBy: item.deleted_by || '',
+                    deletedByEmail: item.deleted_by_email || '',
+                    deletedDate: item.deleted_date || null,
+                };
+            });
     }, [rawData, currentTime]);
 
     const recycleBinItems = useMemo(() => {
-        const data = deletedHistoryData.data || deletedHistoryData.deleted_work_orders || [];
-        const extractedData = data.map(item => {
-            // Extract dashboard ID from the data
-            const dashboardId = item.dashboard_id || item.dashboardId ||
-                (item.original_dashboard ? item.original_dashboard : null) ||
-                (deletedHistoryData.id ? deletedHistoryData.id.toString() : null);
+        if (!Array.isArray(deletedHistoryData)) return [];
 
-            const dashboardName = item.dashboard_name || item.dashboardName ||
-                `Dashboard ${dashboardId || 'Unknown'}`;
+        return deletedHistoryData
+            .filter(item => item.is_deleted === true)
+            .map(item => {
+                const addr = parseDashboardAddress(item.customer_address || '');
+                return {
+                    id: item.id?.toString() || Math.random().toString(),
+                    workOrderId: item.id,
+                    dashboardId: '1',
+                    deletedOrderId: item.id?.toString() || Math.random().toString(),
+                    originalWorkOrderId: item.id?.toString() || Math.random().toString(),
+                    workOrderNumber: item.work_order_number || 'N/A',
+                    customerName: item.customer_name || 'Unknown',
+                    customerAddress: item.customer_address || '',
+                    deletedBy: item.deleted_by || 'Unknown',
+                    deletedByEmail: item.deleted_by_email || '',
+                    deletedAt: item.deleted_date,
+                    type: (item.call_type || '').toUpperCase().includes('EMERGENCY') ? 'EMERGENCY' : 'STANDARD',
+                    ...addr,
+                };
+            });
+    }, [deletedHistoryData]);
 
-            // Handle both field name formats
-            const deletedOrderId = item.id || item.original_work_order_id;
-            const workOrderNumber = item.work_order_number || 'N/A';
-            const customerName = item.customer_name || 'Unknown';
-            const customerAddress = item.customer_address || '';
-            const deletedBy = item.deleted_by || item.deletedBy || 'Unknown';
-            const deletedByEmail = item.deleted_by_email || item.deletedByEmail || '';
-            const deletedAt = item.deleted_at || item.deletedAt;
-            const deletedFrom = item.deleted_from || item.deletedFrom || 'Unknown';
-            const isPermanentlyDeleted = item.is_permanently_deleted || item.isPermanentlyDeleted || false;
-            const originalWorkOrderId = item.original_work_order_id || item.id;
-
-            return {
-                ...item,
-                dashboardId: dashboardId ? dashboardId.toString() : '1',
-                dashboardName,
-                deletedOrderId: deletedOrderId ? deletedOrderId.toString() : item.id?.toString() || '1',
-                originalWorkOrderId: originalWorkOrderId ? originalWorkOrderId.toString() : '1',
-                workOrderNumber,
-                customerName,
-                customerAddress,
-                deletedBy,
-                deletedByEmail,
-                deletedAt,
-                deletedFrom,
-                isPermanentlyDeleted,
-            };
-        });
-
-        const filtered = extractedData.filter(item => !item.isPermanentlyDeleted);
-        let searchFiltered = [...filtered];
-        if (recycleBinSearch) {
-            const searchLower = recycleBinSearch.toLowerCase();
-            searchFiltered = searchFiltered.filter(item =>
-                (item.workOrderNumber?.toLowerCase() || '').includes(searchLower) ||
-                (item.customerName?.toLowerCase() || '').includes(searchLower) ||
-                (item.customerAddress?.toLowerCase() || '').includes(searchLower) ||
-                (item.deletedBy?.toLowerCase() || '').includes(searchLower) ||
-                (item.deletedFrom?.toLowerCase() || '').includes(searchLower)
-            );
-        }
-
-        return searchFiltered;
-    }, [deletedHistoryData, recycleBinSearch]);
-
-    // SHOW ALL DATA WITHOUT FILTERING FOR EXCAVATOR
     const allPending = useMemo(() => {
         let filtered = processed.filter(l => !l.locatesCalled);
         if (searchTerm) {
@@ -661,10 +688,10 @@ const Locates = () => {
     }, [processed, searchTerm]);
 
     const inProgress = useMemo(() =>
-        processed.filter(l => l.locatesCalled && !l.isExpired && l.workflowStatus !== 'COMPLETE'), [processed]);
+        processed.filter(l => l.locatesCalled && !l.timerExpired && l.timeRemainingText !== 'EXPIRED'), [processed]);
 
     const completed = useMemo(() =>
-        processed.filter(l => (l.locatesCalled && l.isExpired) || l.workflowStatus === 'COMPLETE'), [processed]);
+        processed.filter(l => l.locatesCalled && (l.timerExpired || l.timeRemainingText === 'EXPIRED' || l.timeRemainingApi === 'COMPLETED')), [processed]);
 
     const handleChangePagePending = (event, newPage) => {
         setPagePending(newPage);
@@ -714,7 +741,10 @@ const Locates = () => {
     };
 
     const handleMarkCalled = (id, callType) => {
-        markCalledMutation.mutate({ id, callType });
+        markCalledMutation.mutate({
+            id,
+            callType
+        });
     };
 
     const handleManualCompletion = (id) => {
@@ -729,7 +759,6 @@ const Locates = () => {
 
     const executeBulkComplete = () => {
         bulkCompleteWorkOrdersMutation.mutate(selectedForCompletion);
-        setCompleteDialogOpen(false);
     };
 
     const confirmSoftDelete = (selectionSet, section) => {
@@ -741,8 +770,6 @@ const Locates = () => {
 
     const executeSoftDelete = () => {
         softDeleteBulkMutation.mutate(selectedForDeletion);
-        setDeleteDialogOpen(false);
-        setSelectedForDeletion(new Set());
     };
 
     const toggleRecycleBinSelection = (itemKey) => {
@@ -760,7 +787,7 @@ const Locates = () => {
             recycleBinPage * recycleBinRowsPerPage + recycleBinRowsPerPage
         );
 
-        const allPageIds = new Set(currentPageItems.map(item => `${item.dashboardId}_${item.deletedOrderId}`));
+        const allPageIds = new Set(currentPageItems.map(item => item.id));
         const currentSelected = new Set(selectedRecycleBinItems);
         const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
 
@@ -780,12 +807,7 @@ const Locates = () => {
     };
 
     const executeBulkRestore = () => {
-        const itemsToRestore = Array.from(selectedRecycleBinItems).map(itemKey => {
-            const [dashboardId, deletedOrderId] = itemKey.split('_');
-            return { dashboardId, deletedOrderId };
-        });
-        bulkRestoreMutation.mutate(itemsToRestore);
-        setRestoreDialogOpen(false);
+        bulkRestoreMutation.mutate(Array.from(selectedRecycleBinItems));
     };
 
     const confirmBulkPermanentDelete = () => {
@@ -794,12 +816,7 @@ const Locates = () => {
     };
 
     const executeBulkPermanentDelete = () => {
-        const itemsToDelete = Array.from(selectedRecycleBinItems).map(itemKey => {
-            const [dashboardId, deletedOrderId] = itemKey.split('_');
-            return { dashboardId, deletedOrderId };
-        });
-        bulkPermanentDeleteMutation.mutate(itemsToDelete);
-        setPermanentDeleteDialogOpen(false);
+        bulkPermanentDeleteMutation.mutate(Array.from(selectedRecycleBinItems));
     };
 
     const confirmClearAllRecycleBin = () => {
@@ -823,19 +840,13 @@ const Locates = () => {
 
     const executeSingleRestore = () => {
         if (selectedSingleItem) {
-            restoreFromRecycleBinMutation.mutate({
-                dashboardId: selectedSingleItem.dashboardId,
-                deletedOrderId: selectedSingleItem.deletedOrderId
-            });
+            restoreFromRecycleBinMutation.mutate(selectedSingleItem.id);
         }
     };
 
     const executeSinglePermanentDelete = () => {
         if (selectedSingleItem) {
-            permanentDeleteFromRecycleBinMutation.mutate({
-                dashboardId: selectedSingleItem.dashboardId,
-                deletedOrderId: selectedSingleItem.deletedOrderId
-            });
+            permanentDeleteFromRecycleBinMutation.mutate(selectedSingleItem.id);
         }
     };
 
@@ -864,9 +875,7 @@ const Locates = () => {
     };
 
     if (isLoading) {
-        return (
-            <DashboardLoader />
-        );
+        return <DashboardLoader />;
     }
 
     const pendingPageItems = allPending.slice(
@@ -889,7 +898,6 @@ const Locates = () => {
         recycleBinPage * recycleBinRowsPerPage + recycleBinRowsPerPage
     );
 
-    // Helper function to format date from calledAt field for progress table in Pacific Time
     const getCalledAtDate = (item) => {
         if (!item.calledAt) return '—';
         const date = toPacificTime(item.calledAt);
@@ -920,7 +928,7 @@ const Locates = () => {
                             fontWeight: 400,
                         }}
                     >
-                        Dispatch and monitor locate requests efficiently (Times in PST)
+                        Dispatch and monitor locate requests efficiently
                     </Typography>
                 </Box>
                 <Button
@@ -943,10 +951,9 @@ const Locates = () => {
                 </Button>
             </Box>
 
-            {/* UPDATED SECTION - Now shows all pending work orders, not just excavator */}
             <Section
                 title="Pending Locates"
-                color={BLUE_COLOR}  // Changed from ORANGE to BLUE
+                color={BLUE_COLOR}
                 count={allPending.length}
                 selectedCount={selectedPending.size}
                 onDelete={() => confirmSoftDelete(selectedPending, 'Pending Locates')}
@@ -1008,7 +1015,7 @@ const Locates = () => {
 
             <Section
                 title="In Progress"
-                color={ORANGE_COLOR}  // Orange for In Progress
+                color={ORANGE_COLOR}
                 count={inProgress.length}
                 selectedCount={selectedInProgress.size}
                 onDelete={() => confirmSoftDelete(selectedInProgress, 'In Progress')}
@@ -1046,10 +1053,10 @@ const Locates = () => {
                     onToggleSelect={(id) => toggleSelection(setSelectedInProgress, id)}
                     onToggleAll={() => setSelectedInProgress(toggleAllSelection(inProgress, inProgressPageItems, selectedInProgress))}
                     onManualComplete={handleManualCompletion}
-                    color={ORANGE_COLOR}  // Orange for In Progress
+                    color={ORANGE_COLOR}
                     showTimerColumn
                     showCalledBy
-                    showManualCompleteAction={false}
+                    showManualCompleteAction={true}
                     currentTime={currentTime}
                     totalCount={inProgress.length}
                     page={pageInProgress}
@@ -1064,7 +1071,7 @@ const Locates = () => {
 
             <Section
                 title="Completed"
-                color={GREEN_COLOR}  // Green for Completed
+                color={GREEN_COLOR}
                 count={completed.length}
                 selectedCount={selectedCompleted.size}
                 onDelete={() => confirmSoftDelete(selectedCompleted, 'Completed')}
@@ -1074,7 +1081,7 @@ const Locates = () => {
                     selected={selectedCompleted}
                     onToggleSelect={(id) => toggleSelection(setSelectedCompleted, id)}
                     onToggleAll={() => setSelectedCompleted(toggleAllSelection(completed, completedPageItems, selectedCompleted))}
-                    color={GREEN_COLOR}  // Green for Completed
+                    color={GREEN_COLOR}
                     showCalledBy
                     showTimerColumn={false}
                     totalCount={completed.length}
@@ -1174,15 +1181,15 @@ const Locates = () => {
                             <Checkbox
                                 size="small"
                                 checked={recycleBinPageItems.length > 0 && recycleBinPageItems.every(item =>
-                                    selectedRecycleBinItems.has(`${item.dashboardId}_${item.deletedOrderId}`)
+                                    selectedRecycleBinItems.has(item.id)
                                 )}
                                 indeterminate={
                                     recycleBinPageItems.length > 0 &&
                                     recycleBinPageItems.some(item =>
-                                        selectedRecycleBinItems.has(`${item.dashboardId}_${item.deletedOrderId}`)
+                                        selectedRecycleBinItems.has(item.id)
                                     ) &&
                                     !recycleBinPageItems.every(item =>
-                                        selectedRecycleBinItems.has(`${item.dashboardId}_${item.deletedOrderId}`)
+                                        selectedRecycleBinItems.has(item.id)
                                     )
                                 }
                                 onChange={toggleAllRecycleBinSelection}
@@ -1324,25 +1331,21 @@ const Locates = () => {
                                             <TableCell>Address</TableCell>
                                             <TableCell>Deleted By</TableCell>
                                             <TableCell>Deleted At</TableCell>
-                                            <TableCell>Deleted From</TableCell>
                                             <TableCell width={150}>Actions</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
                                         {recycleBinPageItems.map((item) => {
-                                            const itemKey = `${item.dashboardId}_${item.deletedOrderId}`;
-                                            const isSelected = selectedRecycleBinItems.has(itemKey);
-                                            const address = parseDashboardAddress(item.customerAddress || '');
-                                            const deletedBy = item.deletedBy || 'Unknown';
-                                            const deletedByEmail = item.deletedByEmail || '';
-                                            const deletedFrom = item.deletedFrom || 'Unknown';
+                                            const isSelected = selectedRecycleBinItems.has(item.id);
                                             const workOrderNumber = item.workOrderNumber || 'N/A';
                                             const customerName = item.customerName || 'Unknown';
                                             const type = item.type || 'STANDARD';
+                                            const deletedBy = item.deletedBy || 'Unknown';
+                                            const deletedByEmail = item.deletedByEmail || '';
 
                                             return (
                                                 <TableRow
-                                                    key={itemKey}
+                                                    key={item.id}
                                                     hover
                                                     sx={{
                                                         bgcolor: isSelected ? alpha(PURPLE_COLOR, 0.1) : 'white',
@@ -1355,7 +1358,7 @@ const Locates = () => {
                                                         <Checkbox
                                                             size="small"
                                                             checked={isSelected}
-                                                            onChange={() => toggleRecycleBinSelection(itemKey)}
+                                                            onChange={() => toggleRecycleBinSelection(item.id)}
                                                             sx={{ padding: '4px' }}
                                                         />
                                                     </TableCell>
@@ -1388,13 +1391,13 @@ const Locates = () => {
                                                             color: TEXT_COLOR,
                                                             mb: 0.5,
                                                         }}>
-                                                            {address.street || '—'}
+                                                            {item.street || '—'}
                                                         </Typography>
                                                         <Typography variant="caption" sx={{
                                                             fontSize: '0.75rem',
                                                             color: GRAY_COLOR,
                                                         }}>
-                                                            {[address.city, address.state, address.zip].filter(Boolean).join(', ')}
+                                                            {[item.city, item.state, item.zip].filter(Boolean).join(', ')}
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell>
@@ -1422,19 +1425,6 @@ const Locates = () => {
                                                         }}>
                                                             {formatDateShort(item.deletedAt)}
                                                         </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={deletedFrom}
-                                                            size="small"
-                                                            sx={{
-                                                                fontSize: '0.7rem',
-                                                                height: '20px',
-                                                                backgroundColor: alpha(PURPLE_COLOR, 0.1),
-                                                                color: PURPLE_COLOR,
-                                                                border: `1px solid ${alpha(PURPLE_COLOR, 0.2)}`,
-                                                            }}
-                                                        />
                                                     </TableCell>
                                                     <TableCell>
                                                         <Stack direction="row" spacing={0.5}>
@@ -1506,7 +1496,6 @@ const Locates = () => {
                 </Box>
             </Modal>
 
-            {/* Clear All Recycle Bin Confirmation Dialog */}
             <Dialog
                 open={clearAllDialogOpen}
                 onClose={() => setClearAllDialogOpen(false)}
@@ -1640,12 +1629,17 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Single Restore Confirmation Dialog */}
             <Dialog
                 open={singleRestoreDialogOpen}
                 onClose={() => setSingleRestoreDialogOpen(false)}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                    }
+                }}
             >
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1662,7 +1656,10 @@ const Locates = () => {
                 </DialogContent>
                 <DialogActions>
                     <Button
-                        onClick={() => setSingleRestoreDialogOpen(false)}
+                        onClick={() => {
+                            setSingleRestoreDialogOpen(false);
+                            setSelectedSingleItem(null);
+                        }}
                         variant='outlined'
                         sx={{
                             textTransform: 'none',
@@ -1685,12 +1682,17 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Single Permanent Delete Confirmation Dialog */}
             <Dialog
                 open={singleDeleteDialogOpen}
                 onClose={() => setSingleDeleteDialogOpen(false)}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                    }
+                }}
             >
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1710,7 +1712,10 @@ const Locates = () => {
                     </Alert>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setSingleDeleteDialogOpen(false)}
+                    <Button onClick={() => {
+                        setSingleDeleteDialogOpen(false);
+                        setSelectedSingleItem(null);
+                    }}
                         variant='outlined'
                         color='error'
                         sx={{
@@ -1738,12 +1743,17 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Bulk Restore Confirmation Dialog */}
             <Dialog
                 open={restoreDialogOpen}
                 onClose={() => setRestoreDialogOpen(false)}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                    }
+                }}
             >
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1788,12 +1798,17 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Bulk Permanent Delete Confirmation Dialog */}
             <Dialog
                 open={permanentDeleteDialogOpen}
                 onClose={() => setPermanentDeleteDialogOpen(false)}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                    }
+                }}
             >
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1839,7 +1854,6 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Soft Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}
                 onClose={() => setDeleteDialogOpen(false)}
@@ -1973,7 +1987,6 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Manual Completion Dialog */}
             <Dialog
                 open={completeDialogOpen}
                 onClose={() => setCompleteDialogOpen(false)}
@@ -2274,11 +2287,34 @@ const LocateTable = ({
     onRowsPerPageChange,
     markCalledMutation,
     completeWorkOrderManuallyMutation,
-    tableType = 'pending', // 'pending', 'inProgress', or 'completed'
+    tableType = 'pending',
     getCalledAtDate,
 }) => {
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
+
+    const renderManualCompleteButton = (item) => {
+        if (showManualCompleteAction && tableType === 'inProgress') {
+            return (
+                <Tooltip title="Mark as Complete">
+                    <IconButton
+                        size="small"
+                        onClick={() => onManualComplete(item.workOrderId)}
+                        disabled={completeWorkOrderManuallyMutation?.isPending}
+                        sx={{
+                            color: GREEN_COLOR,
+                            '&:hover': {
+                                backgroundColor: alpha(GREEN_COLOR, 0.1),
+                            },
+                        }}
+                    >
+                        <CheckCircle size={16} />
+                    </IconButton>
+                </Tooltip>
+            );
+        }
+        return null;
+    };
 
     return (
         <TableContainer>
@@ -2364,7 +2400,7 @@ const LocateTable = ({
                             fontWeight: 600,
                             py: 1.5,
                         }}>
-                            Dates (PST)
+                            Date
                         </TableCell>
                         <TableCell sx={{
                             color: TEXT_COLOR,
@@ -2387,6 +2423,19 @@ const LocateTable = ({
                                 Called By
                             </TableCell>
                         )}
+                        {showManualCompleteAction && tableType === 'inProgress' && (
+                            <TableCell
+                                width={100}
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    py: 1.5,
+                                }}
+                            >
+                                Actions
+                            </TableCell>
+                        )}
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2397,7 +2446,8 @@ const LocateTable = ({
                                 (showCallAction ? 1 : 0) +
                                 (showTimerColumn ? 1 : 0) +
                                 4 +
-                                (showCalledBy ? 1 : 0)
+                                (showCalledBy ? 1 : 0) +
+                                (showManualCompleteAction && tableType === 'inProgress' ? 1 : 0)
                             } align="center" sx={{ py: 6 }}>
                                 <Box sx={{
                                     display: 'flex',
@@ -2462,11 +2512,11 @@ const LocateTable = ({
                                                         label={item.callType || 'Called'}
                                                         size="small"
                                                         sx={{
-                                                            backgroundColor: item.callType === 'EMERGENCY'
+                                                            backgroundColor: item.callType === 'Emergency' || item.callType === 'EMERGENCY'
                                                                 ? alpha(RED_COLOR, 0.1)
                                                                 : alpha(BLUE_COLOR, 0.1),
-                                                            color: item.callType === 'EMERGENCY' ? RED_COLOR : BLUE_COLOR,
-                                                            border: `1px solid ${item.callType === 'EMERGENCY'
+                                                            color: item.callType === 'Emergency' || item.callType === 'EMERGENCY' ? RED_COLOR : BLUE_COLOR,
+                                                            border: `1px solid ${item.callType === 'Emergency' || item.callType === 'EMERGENCY'
                                                                 ? alpha(RED_COLOR, 0.2)
                                                                 : alpha(BLUE_COLOR, 0.2)}`,
                                                             fontSize: '0.75rem',
@@ -2483,7 +2533,7 @@ const LocateTable = ({
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
-                                                        onClick={() => onMarkCalled(item.workOrderId || item.id, 'STANDARD')}
+                                                        onClick={() => onMarkCalled(item.workOrderId, 'STANDARD')}
                                                         startIcon={<PhoneCall size={14} />}
                                                         disabled={markCalledMutation?.isPending}
                                                         sx={{
@@ -2493,13 +2543,13 @@ const LocateTable = ({
                                                             px: 1.5,
                                                         }}
                                                     >
-                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === (item.workOrderId || item.id) ? 'Calling...' : 'Standard'}
+                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === item.workOrderId ? 'Calling...' : 'Standard'}
                                                     </Button>
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
                                                         color="error"
-                                                        onClick={() => onMarkCalled(item.workOrderId || item.id, 'EMERGENCY')}
+                                                        onClick={() => onMarkCalled(item.workOrderId, 'EMERGENCY')}
                                                         startIcon={<AlertTriangle size={14} />}
                                                         disabled={markCalledMutation?.isPending}
                                                         sx={{
@@ -2509,7 +2559,7 @@ const LocateTable = ({
                                                             px: 1.5,
                                                         }}
                                                     >
-                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === (item.workOrderId || item.id) ? 'Calling...' : 'Emergency'}
+                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === item.workOrderId ? 'Calling...' : 'Emergency'}
                                                     </Button>
                                                 </Stack>
                                             )}
@@ -2528,7 +2578,7 @@ const LocateTable = ({
                                                                 color: item.timeRemainingColor,
                                                                 fontSize: '0.85rem',
                                                                 fontWeight: item.timeRemainingText === 'EXPIRED' ? 600 : 400,
-                                                                fontFamily: item.callType === 'EMERGENCY' ? 'monospace' : 'inherit'
+                                                                fontFamily: item.callType === 'Emergency' || item.callType === 'EMERGENCY' ? 'monospace' : 'inherit'
                                                             }}
                                                         >
                                                             {item.timeRemainingText}
@@ -2631,9 +2681,7 @@ const LocateTable = ({
                                     <TableCell sx={{ py: 1.5 }}>
                                         <Stack spacing={0.5}>
                                             {tableType === 'completed' ? (
-                                                // Detailed view (for Completed table)
                                                 <>
-                                                    {/* 1. Locate Triggered (scraped_at) */}
                                                     <Box>
                                                         <Typography
                                                             variant="caption"
@@ -2660,7 +2708,6 @@ const LocateTable = ({
                                                         </Typography>
                                                     </Box>
 
-                                                    {/* 2. Locate Called In */}
                                                     <Box>
                                                         <Typography
                                                             variant="caption"
@@ -2701,7 +2748,6 @@ const LocateTable = ({
                                                         </Typography>
                                                     </Box>
 
-                                                    {/* 3. Clear-to-Dig */}
                                                     <Box>
                                                         <Typography
                                                             variant="caption"
@@ -2743,7 +2789,6 @@ const LocateTable = ({
                                                     </Box>
                                                 </>
                                             ) : tableType === 'inProgress' ? (
-                                                // Progress table: Show only Called At date
                                                 <Box>
                                                     <Typography
                                                         variant="caption"
@@ -2769,7 +2814,6 @@ const LocateTable = ({
                                                     </Typography>
                                                 </Box>
                                             ) : (
-                                                // Pending table: Simple view
                                                 <>
                                                     <Box>
                                                         <Box>
@@ -2786,13 +2830,13 @@ const LocateTable = ({
                                                                 <Typography
                                                                     variant="caption"
                                                                     sx={{
-                                                                        color: GREEN_COLOR,
+                                                                        color: BLUE_COLOR,
                                                                         fontSize: '0.75rem',
                                                                         fontWeight: 500,
                                                                         ml: 1,
                                                                     }}
                                                                 >
-                                                                    {formatDate(item.locateTriggeredDate)} {/* Now using scraped_at */}
+                                                                    {formatDate(item.locateTriggeredDate)}
                                                                 </Typography>
                                                             </Typography>
                                                         </Box>
@@ -2895,6 +2939,12 @@ const LocateTable = ({
                                                     —
                                                 </Typography>
                                             )}
+                                        </TableCell>
+                                    )}
+
+                                    {showManualCompleteAction && tableType === 'inProgress' && (
+                                        <TableCell sx={{ py: 1.5 }}>
+                                            {renderManualCompleteButton(item)}
                                         </TableCell>
                                     )}
                                 </TableRow>

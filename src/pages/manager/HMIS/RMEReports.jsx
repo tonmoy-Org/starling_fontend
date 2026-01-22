@@ -345,6 +345,8 @@ const RMEReports = () => {
         refetchInterval: 60000,
     });
 
+    console.log('workOrders', workOrders);
+
     // Fetch only deleted work orders for history
     const { data: deletedWorkOrders = [] } = useQuery({
         queryKey: ['rme-deleted-work-orders'],

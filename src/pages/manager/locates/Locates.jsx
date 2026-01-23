@@ -13,7 +13,6 @@ import {
     Snackbar,
     Alert,
     CircularProgress,
-    Avatar,
     Stack,
     Checkbox,
     Button,
@@ -26,6 +25,8 @@ import {
     InputAdornment,
     TablePagination,
     Modal,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
@@ -38,7 +39,6 @@ import {
     addDays,
 } from 'date-fns';
 import { format as formatTZ, toZonedTime } from 'date-fns-tz';
-import StyledTextField from '../../../components/ui/StyledTextField';
 
 import {
     CheckCircle,
@@ -54,9 +54,11 @@ import {
     AlertTriangle,
     CheckCheck,
     RotateCcw,
+    History,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import DashboardLoader from '../../../components/Loader/DashboardLoader';
+import OutlineButton from '../../../components/ui/OutlineButton';
 
 const TEXT_COLOR = '#0F1115';
 const BLUE_COLOR = '#1976d2';
@@ -193,6 +195,9 @@ const shouldExpireTimer = (calledAt, callType) => {
 const Locates = () => {
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     const currentUserName = user?.name || 'Admin User';
     const currentUserEmail = user?.email || 'admin@company.com';
@@ -204,23 +209,26 @@ const Locates = () => {
     const [selectedCompleted, setSelectedCompleted] = useState(new Set());
 
     const [pagePending, setPagePending] = useState(0);
-    const [rowsPerPagePending, setRowsPerPagePending] = useState(10);
+    const [rowsPerPagePending, setRowsPerPagePending] = useState(isMobile ? 5 : 10);
     const [pageInProgress, setPageInProgress] = useState(0);
-    const [rowsPerPageInProgress, setRowsPerPageInProgress] = useState(10);
+    const [rowsPerPageInProgress, setRowsPerPageInProgress] = useState(isMobile ? 5 : 10);
     const [pageCompleted, setPageCompleted] = useState(0);
-    const [rowsPerPageCompleted, setRowsPerPageCompleted] = useState(10);
+    const [rowsPerPageCompleted, setRowsPerPageCompleted] = useState(isMobile ? 5 : 10);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
     const [deletionSection, setDeletionSection] = useState('');
     const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
     const [selectedForCompletion, setSelectedForCompletion] = useState(new Set());
-    const [searchTerm, setSearchTerm] = useState('');
+
+    const [searchPending, setSearchPending] = useState('');
+    const [searchInProgress, setSearchInProgress] = useState('');
+    const [searchCompleted, setSearchCompleted] = useState('');
 
     const [recycleBinOpen, setRecycleBinOpen] = useState(false);
     const [recycleBinSearch, setRecycleBinSearch] = useState('');
     const [recycleBinPage, setRecycleBinPage] = useState(0);
-    const [recycleBinRowsPerPage, setRecycleBinRowsPerPage] = useState(10);
+    const [recycleBinRowsPerPage, setRecycleBinRowsPerPage] = useState(isMobile ? 5 : 10);
     const [selectedRecycleBinItems, setSelectedRecycleBinItems] = useState(new Set());
     const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
     const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
@@ -244,7 +252,7 @@ const Locates = () => {
         return () => clearInterval(timer);
     }, []);
 
-    const { data: rawData = [], isLoading, refetch } = useQuery({
+    const { data: rawData = [], isLoading } = useQuery({
         queryKey: ['locates-all'],
         queryFn: async () => {
             const res = await axiosInstance.get('/locates/');
@@ -286,7 +294,7 @@ const Locates = () => {
         return () => clearInterval(interval);
     }, [rawData, queryClient]);
 
-    const { data: deletedHistoryData = [], isLoading: isRecycleBinLoading, refetch: refetchRecycleBin } = useQuery({
+    const { data: deletedHistoryData = [], isLoading: isRecycleBinLoading } = useQuery({
         queryKey: ['locates-deleted-history'],
         queryFn: async () => {
             try {
@@ -331,7 +339,7 @@ const Locates = () => {
             );
             return response.data;
         },
-        onSuccess: (data) => {
+        onSuccess: () => {
             invalidateAndRefetch();
             showSnackbar('Locate call status updated', 'success');
         },
@@ -350,8 +358,7 @@ const Locates = () => {
                     deleted_by_email: currentUserEmail,
                 })
             );
-            const responses = await Promise.all(promises);
-            return responses.map(r => r.data);
+            await Promise.all(promises);
         },
         onSuccess: () => {
             invalidateAndRefetch();
@@ -398,8 +405,7 @@ const Locates = () => {
                     completed_at: new Date().toISOString(),
                 })
             );
-            const responses = await Promise.all(promises);
-            return responses.map(r => r.data);
+            await Promise.all(promises);
         },
         onSuccess: (responses) => {
             invalidateAndRefetch();
@@ -435,31 +441,37 @@ const Locates = () => {
             showSnackbar(err?.response?.data?.message || 'Restore failed', 'error');
         },
     });
-
     const bulkRestoreMutation = useMutation({
         mutationFn: async (ids) => {
-            const promises = ids.map(id =>
-                axiosInstance.patch(`/locates/${id}/`, {
-                    is_deleted: false,
-                    deleted_date: null,
-                    deleted_by: '',
-                    deleted_by_email: '',
-                })
-            );
-            const responses = await Promise.all(promises);
-            return responses.map(r => r.data);
+          const promises = ids.map(id =>
+            axiosInstance.patch(`/locates/${id}/`, {
+              is_deleted: false,
+              deleted_date: null,
+              deleted_by: '',
+              deleted_by_email: '',
+            })
+          );
+      
+          await Promise.all(promises);
+          return ids; // 👈 return something
         },
-        onSuccess: (responses) => {
-            invalidateAndRefetch();
-            setSelectedRecycleBinItems(new Set());
-            setRestoreDialogOpen(false);
-            showSnackbar(`${responses.length} item(s) restored`, 'success');
+      
+        onSuccess: (response) => {
+          invalidateAndRefetch();
+          setSelectedRecycleBinItems(new Set());
+          setRestoreDialogOpen(false);
+      
+          showSnackbar(`${response.length} item(s) restored`, 'success');
         },
+      
         onError: (err) => {
-            console.error('Bulk restore error:', err);
-            showSnackbar(err?.response?.data?.message || 'Bulk restore failed', 'error');
+          console.error('Bulk restore error:', err);
+          showSnackbar(
+            err?.response?.data?.message || 'Bulk restore failed',
+            'error'
+          );
         },
-    });
+      });      
 
     const permanentDeleteFromRecycleBinMutation = useMutation({
         mutationFn: async (id) => {
@@ -484,8 +496,7 @@ const Locates = () => {
             const promises = ids.map(id =>
                 axiosInstance.delete(`/locates/${id}/`)
             );
-            const responses = await Promise.all(promises);
-            return responses.map(r => r.data);
+            await Promise.all(promises);
         },
         onSuccess: (responses) => {
             invalidateAndRefetch();
@@ -599,9 +610,6 @@ const Locates = () => {
                     calledAt: item.called_at,
                     completionDate: completionDate,
                     formattedCompletionDate: completionDate ? formatMonthDay(completionDate) : '—',
-                    priorityName: item.priority_name || 'Standard',
-                    priorityColor: item.priority_color,
-                    needsCall: (item.priority_name || '').toUpperCase() === 'EXCAVATOR',
                     isExpired,
                     timeRemainingText,
                     timeRemainingDetail,
@@ -614,10 +622,6 @@ const Locates = () => {
                     clearToDigDate: item.completed_at || '',
                     targetWorkDate: targetWorkDate,
                     scheduledDateRaw: item.scheduled_date || 'ASAP',
-                    isDeleted: item.is_deleted === true,
-                    deletedBy: item.deleted_by || '',
-                    deletedByEmail: item.deleted_by_email || '',
-                    deletedDate: item.deleted_date || null,
                 };
             });
     }, [rawData, currentTime]);
@@ -632,12 +636,8 @@ const Locates = () => {
                 return {
                     id: item.id?.toString() || Math.random().toString(),
                     workOrderId: item.id,
-                    dashboardId: '1',
-                    deletedOrderId: item.id?.toString() || Math.random().toString(),
-                    originalWorkOrderId: item.id?.toString() || Math.random().toString(),
                     workOrderNumber: item.work_order_number || 'N/A',
                     customerName: item.customer_name || 'Unknown',
-                    customerAddress: item.customer_address || '',
                     deletedBy: item.deleted_by || 'Unknown',
                     deletedByEmail: item.deleted_by_email || '',
                     deletedAt: item.deleted_date,
@@ -647,10 +647,11 @@ const Locates = () => {
             });
     }, [deletedHistoryData]);
 
+    // Filter functions for each table
     const allPending = useMemo(() => {
         let filtered = processed.filter(l => !l.locatesCalled);
-        if (searchTerm) {
-            const searchLower = searchTerm.toLowerCase();
+        if (searchPending) {
+            const searchLower = searchPending.toLowerCase();
             filtered = filtered.filter(l =>
                 l.workOrderNumber?.toLowerCase().includes(searchLower) ||
                 l.customerName?.toLowerCase().includes(searchLower) ||
@@ -660,13 +661,39 @@ const Locates = () => {
             );
         }
         return filtered;
-    }, [processed, searchTerm]);
+    }, [processed, searchPending]);
 
-    const inProgress = useMemo(() =>
-        processed.filter(l => l.locatesCalled && !l.timerExpired && l.timeRemainingText !== 'EXPIRED'), [processed]);
+    const inProgress = useMemo(() => {
+        let filtered = processed.filter(l => l.locatesCalled && !l.timerExpired && l.timeRemainingText !== 'EXPIRED');
+        if (searchInProgress) {
+            const searchLower = searchInProgress.toLowerCase();
+            filtered = filtered.filter(l =>
+                l.workOrderNumber?.toLowerCase().includes(searchLower) ||
+                l.customerName?.toLowerCase().includes(searchLower) ||
+                l.street?.toLowerCase().includes(searchLower) ||
+                l.city?.toLowerCase().includes(searchLower) ||
+                l.techName?.toLowerCase().includes(searchLower) ||
+                l.calledByName?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processed, searchInProgress]);
 
-    const completed = useMemo(() =>
-        processed.filter(l => l.locatesCalled && (l.timerExpired || l.timeRemainingText === 'EXPIRED' || l.timeRemainingApi === 'COMPLETED')), [processed]);
+    const completed = useMemo(() => {
+        let filtered = processed.filter(l => l.locatesCalled && (l.timerExpired || l.timeRemainingText === 'EXPIRED' || l.timeRemainingApi === 'COMPLETED'));
+        if (searchCompleted) {
+            const searchLower = searchCompleted.toLowerCase();
+            filtered = filtered.filter(l =>
+                l.workOrderNumber?.toLowerCase().includes(searchLower) ||
+                l.customerName?.toLowerCase().includes(searchLower) ||
+                l.street?.toLowerCase().includes(searchLower) ||
+                l.city?.toLowerCase().includes(searchLower) ||
+                l.techName?.toLowerCase().includes(searchLower) ||
+                l.calledByName?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processed, searchCompleted]);
 
     const handleChangePagePending = (event, newPage) => {
         setPagePending(newPage);
@@ -871,8 +898,69 @@ const Locates = () => {
         return formatTZ(date, 'MMM dd, yyyy HH:mm', { timeZone: TIMEZONE });
     };
 
+    // Search input component
+    const SearchInput = ({ value, onChange, placeholder, color, fullWidth = false }) => {
+        return (
+            <Box sx={{ position: 'relative', width: fullWidth ? '100%' : 250 }}>
+                <Box
+                    component="input"
+                    placeholder={placeholder}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    sx={{
+                        width: '100%',
+                        fontSize: '0.8rem',
+                        height: '36px',
+                        paddingLeft: '36px',
+                        paddingRight: value ? '36px' : '16px',
+                        border: `1px solid ${alpha(color, 0.2)}`,
+                        borderRadius: '4px',
+                        outline: 'none',
+                        '&:focus': {
+                            borderColor: color,
+                            boxShadow: `0 0 0 2px ${alpha(color, 0.1)}`,
+                        },
+                        '&::placeholder': {
+                            color: alpha(GRAY_COLOR, 0.6),
+                        },
+                    }}
+                />
+                <Search
+                    size={16}
+                    color={GRAY_COLOR}
+                    style={{
+                        position: 'absolute',
+                        left: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                    }}
+                />
+                {value && (
+                    <IconButton
+                        size="small"
+                        onClick={() => onChange('')}
+                        sx={{
+                            position: 'absolute',
+                            right: '4px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            padding: '4px',
+                        }}
+                    >
+                        <X size={16} />
+                    </IconButton>
+                )}
+            </Box>
+        );
+    };
+
     return (
         <Box>
+            <Helmet>
+                <title>Locates | Sterling Septic & Plumbing LLC</title>
+                <meta name="description" content="Super Admin Locates page" />
+            </Helmet>
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography
@@ -899,11 +987,11 @@ const Locates = () => {
                 </Box>
                 <Button
                     variant="outlined"
-                    startIcon={<Trash2 size={16} />}
+                    startIcon={<History size={16} />}
                     onClick={() => setRecycleBinOpen(true)}
                     sx={{
                         textTransform: 'none',
-                        fontSize: '0.85rem',
+                        fontSize: isMobile ? '0.75rem' : '0.85rem',
                         fontWeight: 500,
                         color: PURPLE_COLOR,
                         borderColor: alpha(PURPLE_COLOR, 0.3),
@@ -913,51 +1001,28 @@ const Locates = () => {
                         },
                     }}
                 >
-                    Recycle Bin ({recycleBinCount})
+                    {isMobile ? `Bin (${recycleBinCount})` : `Recycle Bin (${recycleBinCount})`}
                 </Button>
             </Box>
 
+            {/* Pending Locates */}
             <Section
                 title="Pending Locates"
                 color={BLUE_COLOR}
                 count={allPending.length}
                 selectedCount={selectedPending.size}
                 onDelete={() => confirmSoftDelete(selectedPending, 'Pending Locates')}
+                isMobile={isMobile}
                 additionalActions={
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <StyledTextField
-                            size="small"
-                            placeholder="Search..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            sx={{
-                                width: 200,
-                                '& .MuiInputBase-root': {
-                                    fontSize: '0.8rem',
-                                    height: '36px',
-                                },
-                            }}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Search size={16} color={GRAY_COLOR} />
-                                    </InputAdornment>
-                                ),
-                                endAdornment: searchTerm && (
-                                    <InputAdornment position="end">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => setSearchTerm('')}
-                                            edge="end"
-                                            sx={{ p: 0.5 }}
-                                        >
-                                            <X size={16} />
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            }}
+                    <Box sx={{ width: isMobile ? '100%' : 'auto', mt: isMobile ? 1 : 0 }}>
+                        <SearchInput
+                            value={searchPending}
+                            onChange={setSearchPending}
+                            placeholder="Search pending locates..."
+                            color={BLUE_COLOR}
+                            fullWidth={isMobile}
                         />
-                    </Stack>
+                    </Box>
                 }
             >
                 <LocateTable
@@ -976,43 +1041,120 @@ const Locates = () => {
                     markCalledMutation={markCalledMutation}
                     tableType="pending"
                     getCalledAtDate={getCalledAtDate}
+                    isMobile={isMobile}
                 />
             </Section>
 
-            <Section
-                title="In Progress"
-                color={ORANGE_COLOR}
-                count={inProgress.length}
-                selectedCount={selectedInProgress.size}
-                onDelete={() => confirmSoftDelete(selectedInProgress, 'In Progress')}
-                additionalActions={
-                    selectedInProgress.size > 0 ? (
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <Button
-                                variant="contained"
-                                color="success"
+            {/* In Progress */}
+            <Paper
+                elevation={0}
+                sx={{
+                    mb: 4,
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    border: `1px solid ${alpha(ORANGE_COLOR, 0.15)}`,
+                    bgcolor: 'white'
+                }}
+            >
+                <Box
+                    sx={{
+                        p: isMobile ? 1 : 1.5,
+                        bgcolor: 'white',
+                        borderBottom: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexDirection: isMobile ? 'column' : 'row',
+                        gap: isMobile ? 1 : 0,
+                    }}
+                >
+                    <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        width: isMobile ? '100%' : 'auto',
+                        justifyContent: isMobile ? 'space-between' : 'flex-start'
+                    }}>
+                        <Typography
+                            sx={{
+                                fontSize: isMobile ? '0.85rem' : '0.9rem',
+                                color: TEXT_COLOR,
+                                fontWeight: 600,
+                            }}
+                        >
+                            In Progress
+                            <Chip
                                 size="small"
-                                onClick={confirmBulkComplete}
-                                startIcon={<CheckCheck size={14} />}
-                                disabled={bulkCompleteWorkOrdersMutation.isPending}
+                                label={inProgress.length}
                                 sx={{
-                                    textTransform: 'none',
+                                    ml: 1,
+                                    bgcolor: alpha(ORANGE_COLOR, 0.08),
+                                    color: TEXT_COLOR,
                                     fontSize: '0.75rem',
-                                    height: '30px',
-                                    px: 1.5,
-                                    bgcolor: GREEN_COLOR,
-                                    '&:hover': {
-                                        bgcolor: alpha(GREEN_COLOR, 0.9),
+                                    fontWeight: 500,
+                                    height: '22px',
+                                    '& .MuiChip-label': {
+                                        px: 1,
                                     },
                                 }}
-                            >
-                                Complete ({selectedInProgress.size})
-                            </Button>
-                        </Stack>
-                    ) : null
-                }
-                showTimer
-            >
+                            />
+                        </Typography>
+                        {selectedInProgress.size > 0 && (
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    size="small"
+                                    onClick={confirmBulkComplete}
+                                    startIcon={<CheckCheck size={14} />}
+                                    disabled={bulkCompleteWorkOrdersMutation.isPending}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontSize: '0.75rem',
+                                        px: 1.5,
+                                        borderRadius: '2px',
+                                        bgcolor: GREEN_COLOR,
+                                        '&:hover': {
+                                            bgcolor: alpha(GREEN_COLOR, 0.9),
+                                        },
+                                    }}
+                                >
+                                    Complete ({selectedInProgress.size})
+                                </Button>
+                                <OutlineButton
+                                    size="small"
+                                    onClick={() => confirmSoftDelete(selectedInProgress, 'In Progress')}
+                                    startIcon={<Trash2 size={14} />}
+                                >
+                                    Delete ({selectedInProgress.size})
+                                </OutlineButton>
+                            </Box>
+                        )}
+                    </Box>
+                    <Box sx={{
+                        display: { md: 'flex' },
+                        alignItems: 'center',
+                        gap: 1.5,
+                        width: isMobile ? '100%' : 'auto',
+                        justifyContent: isMobile ? 'space-between' : 'flex-end'
+                    }}>
+                        <Box sx={{
+                            display: 'flex',
+                            gap: 1,
+                            width: isMobile ? '100%' : 'auto',
+                            flexDirection: isMobile ? 'column' : 'row',
+                            mt: isMobile ? 1 : 0
+                        }}>
+                            <SearchInput
+                                value={searchInProgress}
+                                onChange={setSearchInProgress}
+                                placeholder="Search in progress..."
+                                color={ORANGE_COLOR}
+                                fullWidth={isMobile}
+                            />
+                        </Box>
+                    </Box>
+                </Box>
                 <LocateTable
                     items={inProgressPageItems}
                     selected={selectedInProgress}
@@ -1023,7 +1165,6 @@ const Locates = () => {
                     showTimerColumn
                     showCalledBy
                     showManualCompleteAction={true}
-                    currentTime={currentTime}
                     totalCount={inProgress.length}
                     page={pageInProgress}
                     rowsPerPage={rowsPerPageInProgress}
@@ -1032,15 +1173,29 @@ const Locates = () => {
                     completeWorkOrderManuallyMutation={completeWorkOrderManuallyMutation}
                     tableType="inProgress"
                     getCalledAtDate={getCalledAtDate}
+                    isMobile={isMobile}
                 />
-            </Section>
+            </Paper>
 
+            {/* Completed */}
             <Section
                 title="Completed"
                 color={GREEN_COLOR}
                 count={completed.length}
                 selectedCount={selectedCompleted.size}
                 onDelete={() => confirmSoftDelete(selectedCompleted, 'Completed')}
+                isMobile={isMobile}
+                additionalActions={
+                    <Box sx={{ width: isMobile ? '100%' : 'auto', mt: isMobile ? 1 : 0 }}>
+                        <SearchInput
+                            value={searchCompleted}
+                            onChange={setSearchCompleted}
+                            placeholder="Search completed..."
+                            color={GREEN_COLOR}
+                            fullWidth={isMobile}
+                        />
+                    </Box>
+                }
             >
                 <LocateTable
                     items={completedPageItems}
@@ -1057,9 +1212,11 @@ const Locates = () => {
                     onRowsPerPageChange={handleChangeRowsPerPageCompleted}
                     tableType="completed"
                     getCalledAtDate={getCalledAtDate}
+                    isMobile={isMobile}
                 />
             </Section>
 
+            {/* Recycle Bin Modal */}
             <Modal
                 open={recycleBinOpen}
                 onClose={() => setRecycleBinOpen(false)}
@@ -1071,7 +1228,7 @@ const Locates = () => {
                 }}
             >
                 <Box sx={{
-                    width: '95%',
+                    width: isMobile ? '100%' : '95%',
                     maxWidth: 1400,
                     maxHeight: '90vh',
                     bgcolor: 'white',
@@ -1080,6 +1237,7 @@ const Locates = () => {
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
+                    m: isMobile ? 1 : 0,
                 }}>
                     <Box sx={{
                         p: 2,
@@ -1100,7 +1258,7 @@ const Locates = () => {
                                 backgroundColor: alpha(PURPLE_COLOR, 0.1),
                                 color: PURPLE_COLOR,
                             }}>
-                                <Trash2 size={20} />
+                                <History size={20} />
                             </Box>
                             <Box>
                                 <Typography variant="h6" sx={{
@@ -1119,20 +1277,18 @@ const Locates = () => {
                                 </Typography>
                             </Box>
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <IconButton
-                                size="small"
-                                onClick={() => setRecycleBinOpen(false)}
-                                sx={{
-                                    color: GRAY_COLOR,
-                                    '&:hover': {
-                                        backgroundColor: alpha(GRAY_COLOR, 0.1),
-                                    },
-                                }}
-                            >
-                                <X size={20} />
-                            </IconButton>
-                        </Box>
+                        <IconButton
+                            size="small"
+                            onClick={() => setRecycleBinOpen(false)}
+                            sx={{
+                                color: GRAY_COLOR,
+                                '&:hover': {
+                                    backgroundColor: alpha(GRAY_COLOR, 0.1),
+                                },
+                            }}
+                        >
+                            <X size={20} />
+                        </IconButton>
                     </Box>
 
                     <Box sx={{
@@ -1142,8 +1298,15 @@ const Locates = () => {
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         gap: 2,
+                        flexDirection: isMobile ? 'column' : 'row',
                     }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            width: isMobile ? '100%' : 'auto',
+                            flexWrap: isMobile ? 'wrap' : 'nowrap'
+                        }}>
                             <Checkbox
                                 size="small"
                                 checked={recycleBinPageItems.length > 0 && recycleBinPageItems.every(item =>
@@ -1159,42 +1322,30 @@ const Locates = () => {
                                     )
                                 }
                                 onChange={toggleAllRecycleBinSelection}
-                                sx={{ padding: '4px' }}
-                            />
-                            <StyledTextField
-                                size="small"
-                                placeholder="Search deleted items..."
-                                value={recycleBinSearch}
-                                fullWidth
-                                onChange={(e) => setRecycleBinSearch(e.target.value)}
                                 sx={{
-                                    width: 250,
-                                    '& .MuiInputBase-root': {
-                                        fontSize: '0.8rem',
+                                    padding: '4px',
+                                    color: PURPLE_COLOR,
+                                    '&.Mui-checked': {
+                                        color: PURPLE_COLOR,
                                     },
                                 }}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <Search size={16} color={GRAY_COLOR} />
-                                        </InputAdornment>
-                                    ),
-                                    endAdornment: recycleBinSearch && (
-                                        <InputAdornment position="end">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => setRecycleBinSearch('')}
-                                                edge="end"
-                                                sx={{ p: 0.5 }}
-                                            >
-                                                <X size={16} />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    ),
-                                }}
+                            />
+                            <SearchInput
+                                value={recycleBinSearch}
+                                onChange={setRecycleBinSearch}
+                                placeholder="Search deleted items..."
+                                color={PURPLE_COLOR}
+                                fullWidth={isMobile}
                             />
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Box sx={{
+                            display: 'flex',
+                            gap: 1,
+                            width: isMobile ? '100%' : 'auto',
+                            justifyContent: isMobile ? 'flex-start' : 'flex-start',
+                            mt: isMobile ? 1 : 0,
+                            flexWrap: isMobile ? 'wrap' : 'nowrap'
+                        }}>
                             <Button
                                 variant="outlined"
                                 size="small"
@@ -1212,7 +1363,7 @@ const Locates = () => {
                                     },
                                 }}
                             >
-                                Restore ({selectedRecycleBinItems.size})
+                                {isSmallMobile ? 'Restore' : 'Restore'} ({selectedRecycleBinItems.size})
                             </Button>
                             <Button
                                 variant="outlined"
@@ -1231,7 +1382,7 @@ const Locates = () => {
                                     },
                                 }}
                             >
-                                Delete ({selectedRecycleBinItems.size})
+                                {isSmallMobile ? 'Delete' : 'Delete'} ({selectedRecycleBinItems.size})
                             </Button>
                         </Box>
                     </Box>
@@ -1243,42 +1394,56 @@ const Locates = () => {
                             </Box>
                         ) : recycleBinItems.length === 0 ? (
                             <Box sx={{ textAlign: 'center', py: 8 }}>
-                                <Trash2 size={48} color={alpha(GRAY_COLOR, 0.3)} />
+                                <History size={48} color={alpha(GRAY_COLOR, 0.3)} />
                                 <Typography variant="body2" sx={{
                                     mt: 2,
                                     color: GRAY_COLOR,
                                     fontSize: '0.9rem',
                                 }}>
-                                    Recycle bin is empty
+                                    No deleted items in recycle bin
                                 </Typography>
                                 <Typography variant="caption" sx={{
                                     color: GRAY_COLOR,
                                     fontSize: '0.8rem',
                                 }}>
-                                    Deleted work orders will appear here
+                                    Deleted items will appear here
                                 </Typography>
                             </Box>
                         ) : (
-                            <TableContainer>
-                                <Table size="small">
+                            <TableContainer sx={{
+                                overflowX: 'auto',
+                                '&::-webkit-scrollbar': {
+                                    height: '8px',
+                                },
+                                '&::-webkit-scrollbar-track': {
+                                    backgroundColor: alpha(PURPLE_COLOR, 0.05),
+                                },
+                                '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: alpha(PURPLE_COLOR, 0.2),
+                                    borderRadius: '4px',
+                                },
+                            }}>
+                                <Table size="small" sx={{ minWidth: isMobile ? 1000 : 'auto' }}>
                                     <TableHead>
                                         <TableRow sx={{
                                             bgcolor: alpha(PURPLE_COLOR, 0.04),
                                             '& th': {
                                                 borderBottom: `2px solid ${alpha(PURPLE_COLOR, 0.1)}`,
                                                 fontWeight: 600,
-                                                fontSize: '0.8rem',
+                                                fontSize: isMobile ? '0.75rem' : '0.8rem',
                                                 color: TEXT_COLOR,
                                                 py: 1.5,
+                                                px: 1.5,
+                                                whiteSpace: 'nowrap',
                                             }
                                         }}>
                                             <TableCell padding="checkbox" width={50} />
-                                            <TableCell>Work Order</TableCell>
-                                            <TableCell>Customer</TableCell>
-                                            <TableCell>Address</TableCell>
-                                            <TableCell>Deleted By</TableCell>
-                                            <TableCell>Deleted At</TableCell>
-                                            <TableCell width={150}>Actions</TableCell>
+                                            <TableCell sx={{ minWidth: 120 }}>Work Order</TableCell>
+                                            <TableCell sx={{ minWidth: 120 }}>Customer</TableCell>
+                                            <TableCell sx={{ minWidth: 180 }}>Address</TableCell>
+                                            <TableCell sx={{ minWidth: 120 }}>Deleted By</TableCell>
+                                            <TableCell sx={{ minWidth: 120 }}>Deleted At</TableCell>
+                                            <TableCell width={150} sx={{ minWidth: 120 }}>Actions</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -1306,12 +1471,18 @@ const Locates = () => {
                                                             size="small"
                                                             checked={isSelected}
                                                             onChange={() => toggleRecycleBinSelection(item.id)}
-                                                            sx={{ padding: '4px' }}
+                                                            sx={{
+                                                                padding: '4px',
+                                                                color: PURPLE_COLOR,
+                                                                '&.Mui-checked': {
+                                                                    color: PURPLE_COLOR,
+                                                                },
+                                                            }}
                                                         />
                                                     </TableCell>
                                                     <TableCell>
                                                         <Typography variant="body2" sx={{
-                                                            fontSize: '0.85rem',
+                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                             fontWeight: 500,
                                                             color: TEXT_COLOR,
                                                         }}>
@@ -1326,7 +1497,7 @@ const Locates = () => {
                                                     </TableCell>
                                                     <TableCell>
                                                         <Typography variant="body2" sx={{
-                                                            fontSize: '0.85rem',
+                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                             color: TEXT_COLOR,
                                                         }}>
                                                             {customerName}
@@ -1334,7 +1505,7 @@ const Locates = () => {
                                                     </TableCell>
                                                     <TableCell>
                                                         <Typography variant="body2" sx={{
-                                                            fontSize: '0.85rem',
+                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                             color: TEXT_COLOR,
                                                             mb: 0.5,
                                                         }}>
@@ -1344,18 +1515,18 @@ const Locates = () => {
                                                             fontSize: '0.75rem',
                                                             color: GRAY_COLOR,
                                                         }}>
-                                                            {[item.city, item.state, item.zip].filter(Boolean).join(', ')}
+                                                            {[item.city, item.state, item.zip].filter(Boolean).join(', ') || '—'}
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Box>
                                                             <Typography variant="body2" sx={{
-                                                                fontSize: '0.85rem',
+                                                                fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                                 color: TEXT_COLOR,
                                                             }}>
                                                                 {deletedBy}
                                                             </Typography>
-                                                            {deletedByEmail && (
+                                                            {deletedByEmail && !isMobile && (
                                                                 <Typography variant="caption" sx={{
                                                                     fontSize: '0.75rem',
                                                                     color: GRAY_COLOR,
@@ -1367,7 +1538,7 @@ const Locates = () => {
                                                     </TableCell>
                                                     <TableCell>
                                                         <Typography variant="body2" sx={{
-                                                            fontSize: '0.85rem',
+                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                             color: TEXT_COLOR,
                                                         }}>
                                                             {formatDateShort(item.deletedAt)}
@@ -1443,6 +1614,7 @@ const Locates = () => {
                 </Box>
             </Modal>
 
+            {/* Single Restore Dialog */}
             <Dialog
                 open={singleRestoreDialogOpen}
                 onClose={() => setSingleRestoreDialogOpen(false)}
@@ -1474,9 +1646,12 @@ const Locates = () => {
                             setSingleRestoreDialogOpen(false);
                             setSelectedSingleItem(null);
                         }}
-                        variant='outlined'
                         sx={{
                             textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
                         }}
                     >
                         Cancel
@@ -1486,9 +1661,18 @@ const Locates = () => {
                         color="success"
                         onClick={executeSingleRestore}
                         disabled={restoreFromRecycleBinMutation.isPending}
-                        startIcon={<RotateCcw size={16} />}
+                        startIcon={<RotateCcw size={14} />}
                         sx={{
                             textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: GREEN_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
                         }}
                     >
                         {restoreFromRecycleBinMutation.isPending ? 'Restoring...' : 'Restore'}
@@ -1496,6 +1680,7 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* Single Delete Dialog */}
             <Dialog
                 open={singleDeleteDialogOpen}
                 onClose={() => setSingleDeleteDialogOpen(false)}
@@ -1530,26 +1715,32 @@ const Locates = () => {
                         setSingleDeleteDialogOpen(false);
                         setSelectedSingleItem(null);
                     }}
-                        variant='outlined'
-                        color='error'
                         sx={{
                             textTransform: 'none',
+                            color: TEXT_COLOR,
                             fontSize: '0.85rem',
                             fontWeight: 400,
+                            px: 2,
                         }}
                     >
                         Cancel
                     </Button>
                     <Button
                         variant="contained"
-                        color="error"
                         onClick={executeSinglePermanentDelete}
                         disabled={permanentDeleteFromRecycleBinMutation.isPending}
-                        startIcon={<Trash2 size={16} />}
+                        startIcon={<Trash2 size={14} />}
                         sx={{
                             textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: RED_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(RED_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
                         }}
                     >
                         {permanentDeleteFromRecycleBinMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
@@ -1557,6 +1748,7 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* Restore Dialog */}
             <Dialog
                 open={restoreDialogOpen}
                 onClose={() => setRestoreDialogOpen(false)}
@@ -1611,7 +1803,140 @@ const Locates = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+            <Dialog
+                open={restoreDialogOpen}
+                onClose={() => setRestoreDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(GREEN_COLOR, 0.1),
+                            color: GREEN_COLOR,
+                        }}>
+                            <RotateCcw size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Restore Items
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Restore items from recycle bin
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to restore <strong>{selectedRecycleBinItems.size} item(s)</strong> from recycle bin?
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(GREEN_COLOR, 0.05),
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertCircle size={18} color={GREEN_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: GREEN_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Note
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Restored items will be moved back to the Report Needed stage.
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setRestoreDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={executeBulkRestore}
+                        disabled={bulkRestoreMutation.isPending}
+                        variant="contained"
+                        color="success"
+                        startIcon={<RotateCcw size={16} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: GREEN_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        {bulkRestoreMutation.isPending ? 'Restoring...' : 'Restore Items'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
+            {/* Permanent Delete Dialog */}
             <Dialog
                 open={permanentDeleteDialogOpen}
                 onClose={() => setPermanentDeleteDialogOpen(false)}
@@ -1645,8 +1970,10 @@ const Locates = () => {
                     <Button onClick={() => setPermanentDeleteDialogOpen(false)}
                         sx={{
                             textTransform: 'none',
+                            color: TEXT_COLOR,
                             fontSize: '0.85rem',
                             fontWeight: 400,
+                            px: 2,
                         }}
                     >
                         Cancel
@@ -1659,8 +1986,15 @@ const Locates = () => {
                         startIcon={<Trash2 size={16} />}
                         sx={{
                             textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: RED_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(RED_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
                         }}
                     >
                         {bulkPermanentDeleteMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
@@ -1668,6 +2002,7 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* Move to Recycle Bin Dialog */}
             <Dialog
                 open={deleteDialogOpen}
                 onClose={() => setDeleteDialogOpen(false)}
@@ -1781,17 +2116,18 @@ const Locates = () => {
                         onClick={executeSoftDelete}
                         variant="contained"
                         color="warning"
-                        startIcon={<Trash2 size={16} />}
+                        startIcon={<Trash2 size={12} />}
                         disabled={softDeleteBulkMutation.isPending}
                         sx={{
                             textTransform: 'none',
-                            fontSize: '0.85rem',
+                            fontSize: '0.8rem',
                             fontWeight: 500,
+                            borderRadius: '2px',
                             px: 2,
-                            bgcolor: ORANGE_COLOR,
+                            bgcolor: GREEN_COLOR,
                             boxShadow: 'none',
                             '&:hover': {
-                                bgcolor: alpha(ORANGE_COLOR, 0.9),
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
                                 boxShadow: 'none',
                             },
                         }}
@@ -1801,6 +2137,7 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* Complete Dialog */}
             <Dialog
                 open={completeDialogOpen}
                 onClose={() => setCompleteDialogOpen(false)}
@@ -1936,6 +2273,7 @@ const Locates = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* Snackbar */}
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={3000}
@@ -1993,93 +2331,86 @@ const Section = ({
     children,
     showTimer = false,
     additionalActions = null,
-}) => (
-    <Paper
-        elevation={0}
-        sx={{
-            mb: 4,
-            borderRadius: '6px',
-            overflow: 'hidden',
-            border: `1px solid ${alpha(color, 0.15)}`,
-            bgcolor: 'white'
-        }}
-    >
-        <Box
+    isMobile,
+}) => {
+    return (
+        <Paper
+            elevation={0}
             sx={{
-                p: 1.5,
-                bgcolor: 'white',
-                borderBottom: `1px solid ${alpha(color, 0.1)}`,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+                mb: 4,
+                borderRadius: '6px',
+                overflow: 'hidden',
+                border: `1px solid ${alpha(color, 0.15)}`,
+                bgcolor: 'white'
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Typography
-                    sx={{
-                        fontSize: '0.9rem',
-                        color: TEXT_COLOR,
-                        fontWeight: 600,
-                    }}
-                >
-                    {title}
-                    <Chip
-                        size="small"
-                        label={count}
+            <Box
+                sx={{
+                    p: isMobile ? 1 : 1.5,
+                    bgcolor: 'white',
+                    borderBottom: `1px solid ${alpha(color, 0.1)}`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexDirection: isMobile ? 'column' : 'row',
+                    gap: isMobile ? 1 : 0,
+                }}
+            >
+                <Box sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    width: isMobile ? '100%' : 'auto',
+                    justifyContent: isMobile ? 'space-between' : 'flex-start'
+                }}>
+                    <Typography
                         sx={{
-                            ml: 1,
-                            bgcolor: alpha(color, 0.08),
+                            fontSize: isMobile ? '0.85rem' : '0.9rem',
                             color: TEXT_COLOR,
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            height: '22px',
-                            '& .MuiChip-label': {
-                                px: 1,
-                            },
-                        }}
-                    />
-                </Typography>
-                {showTimer && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Timer size={16} color={GRAY_COLOR} />
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}
-                        >
-                            Real-time countdown active
-                        </Typography>
-                    </Box>
-                )}
-            </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                {additionalActions}
-                {selectedCount > 0 && (
-                    <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        onClick={onDelete}
-                        startIcon={<Trash2 size={14} />}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.75rem',
-                            height: '30px',
-                            px: 1.5,
+                            fontWeight: 600,
                         }}
                     >
-                        Delete ({selectedCount})
-                    </Button>
-                )}
+                        {title}
+                        <Chip
+                            size="small"
+                            label={count}
+                            sx={{
+                                ml: 1,
+                                bgcolor: alpha(color, 0.08),
+                                color: TEXT_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                height: '22px',
+                                '& .MuiChip-label': {
+                                    px: 1,
+                                },
+                            }}
+                        />
+                    </Typography>
+                    {selectedCount > 0 && (
+                        <OutlineButton
+                            size="small"
+                            onClick={onDelete}
+                            startIcon={<Trash2 size={14} />}
+                        >
+                            Delete ({selectedCount})
+                        </OutlineButton>
+                    )}
+                </Box>
+                <Box sx={{
+                    display: { md: 'flex' },
+                    alignItems: 'center',
+                    gap: 1.5,
+                    width: isMobile ? '100%' : 'auto',
+                    justifyContent: isMobile ? 'space-between' : 'flex-end'
+                }}>
+                    {additionalActions}
+                </Box>
             </Box>
-        </Box>
-        {children}
-    </Paper>
-);
+            {children}
+        </Paper>
+    );
+};
 
 const LocateTable = ({
     items,
@@ -2093,7 +2424,6 @@ const LocateTable = ({
     showCalledBy = false,
     showTimerColumn = false,
     showManualCompleteAction = false,
-    currentTime,
     totalCount,
     page,
     rowsPerPage,
@@ -2103,7 +2433,10 @@ const LocateTable = ({
     completeWorkOrderManuallyMutation,
     tableType = 'pending',
     getCalledAtDate,
+    isMobile,
 }) => {
+    const isSmallMobile = useMediaQuery('(max-width: 600px)');
+
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
 
@@ -2131,28 +2464,45 @@ const LocateTable = ({
     };
 
     return (
-        <TableContainer>
-            <Helmet>
-                <title>Locates | Sterling Septic & Plumbing LLC</title>
-                <meta name="description" content="Super Admin Locates page" />
-            </Helmet>
-            <Table size="small">
+        <TableContainer sx={{
+            overflowX: 'auto',
+            '&::-webkit-scrollbar': {
+                height: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+                backgroundColor: alpha(color, 0.05),
+            },
+            '&::-webkit-scrollbar-thumb': {
+                backgroundColor: alpha(color, 0.2),
+                borderRadius: '4px',
+            },
+        }}>
+            <Table size="small" sx={{
+                minWidth: isMobile ? 1000 : 'auto',
+                tableLayout: 'auto',
+            }}>
                 <TableHead>
                     <TableRow sx={{
                         bgcolor: alpha(color, 0.04),
                         '& th': {
                             borderBottom: `2px solid ${alpha(color, 0.1)}`,
+                            py: 1.5,
+                            px: 1.5,
+                            fontSize: isMobile ? '0.75rem' : '0.8rem',
+                            fontWeight: 600,
+                            color: TEXT_COLOR,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                         }
                     }}>
                         <TableCell
                             padding="checkbox"
-                            width={50}
                             sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                py: 1.5,
-                                pl: 2.5,
+                                pl: isMobile ? 1.5 : 2.5,
+                                width: '50px',
+                                minWidth: '50px',
+                                maxWidth: '50px',
                             }}
                         >
                             <Checkbox
@@ -2161,93 +2511,65 @@ const LocateTable = ({
                                 indeterminate={someSelectedOnPage && !allSelectedOnPage}
                                 onChange={onToggleAll}
                                 sx={{
-                                    color: TEXT_COLOR,
+                                    color: color,
+                                    '&.Mui-checked': {
+                                        color: color,
+                                    },
                                     padding: '4px',
                                 }}
                             />
                         </TableCell>
                         {showCallAction && (
-                            <TableCell
-                                width={220}
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    py: 1.5,
-                                }}
-                            >
-                                Call Action
+                            <TableCell sx={{
+                                minWidth: 150,
+                                maxWidth: 200,
+                            }}>
+                                {isMobile ? 'Action' : 'Call Action'}
                             </TableCell>
                         )}
                         {showTimerColumn && (
-                            <TableCell
-                                width={180}
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    py: 1.5,
-                                }}
-                            >
-                                Time Remaining
+                            <TableCell sx={{
+                                minWidth: 120,
+                                maxWidth: 160,
+                            }}>
+                                {isMobile ? 'Time' : 'Time Remaining'}
                             </TableCell>
                         )}
                         <TableCell sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            py: 1.5,
+                            minWidth: 150,
                         }}>
                             Customer
                         </TableCell>
                         <TableCell sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            py: 1.5,
+                            minWidth: 180,
                         }}>
                             Address
                         </TableCell>
                         <TableCell sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            py: 1.5,
+                            minWidth: 180,
                         }}>
                             Date
                         </TableCell>
                         <TableCell sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            py: 1.5,
+                            minWidth: 120,
                         }}>
                             Technician
                         </TableCell>
                         {showCalledBy && (
-                            <TableCell
-                                width={200}
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    py: 1.5,
-                                }}
-                            >
+                            <TableCell sx={{
+                                minWidth: 150,
+                                maxWidth: 200,
+                            }}>
                                 Called By
                             </TableCell>
                         )}
                         {showManualCompleteAction && tableType === 'inProgress' && (
-                            <TableCell
-                                width={100}
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    py: 1.5,
-                                }}
-                            >
-                                Actions
+                            <TableCell sx={{
+                                minWidth: 80,
+                                width: '80px',
+                                maxWidth: '80px',
+                            }}>
+                                {isMobile ? 'Act' : 'Actions'}
                             </TableCell>
                         )}
                     </TableRow>
@@ -2305,23 +2627,36 @@ const LocateTable = ({
                                         },
                                     }}
                                 >
-                                    <TableCell padding="checkbox" sx={{ pl: 2.5, py: 1.5 }}>
+                                    <TableCell padding="checkbox" sx={{
+                                        pl: isMobile ? 1.5 : 2.5,
+                                        py: 1.5,
+                                        width: '50px',
+                                        minWidth: '50px',
+                                        maxWidth: '50px',
+                                    }}>
                                         <Checkbox
                                             checked={isSelected}
                                             onChange={() => onToggleSelect(item.id)}
                                             size="small"
                                             sx={{
-                                                color: TEXT_COLOR,
+                                                color: color,
+                                                '&.Mui-checked': {
+                                                    color: color,
+                                                },
                                                 padding: '4px',
                                             }}
                                         />
                                     </TableCell>
 
                                     {showCallAction && (
-                                        <TableCell sx={{ py: 1.5 }}>
+                                        <TableCell sx={{
+                                            py: 1.5,
+                                            minWidth: 150,
+                                            maxWidth: 200,
+                                        }}>
                                             {item.locatesCalled ? (
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                    <CheckCircle size={18} color={RED_COLOR} />
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <CheckCircle size={isMobile ? 16 : 18} color={RED_COLOR} />
                                                     <Chip
                                                         label={item.callType || 'Called'}
                                                         size="small"
@@ -2333,9 +2668,9 @@ const LocateTable = ({
                                                             border: `1px solid ${item.callType === 'Emergency' || item.callType === 'EMERGENCY'
                                                                 ? alpha(RED_COLOR, 0.2)
                                                                 : alpha(BLUE_COLOR, 0.2)}`,
-                                                            fontSize: '0.75rem',
+                                                            fontSize: isMobile ? '0.7rem' : '0.75rem',
                                                             fontWeight: 500,
-                                                            height: '22px',
+                                                            height: isMobile ? '22px' : '22px',
                                                             '& .MuiChip-label': {
                                                                 px: 1,
                                                             },
@@ -2343,37 +2678,45 @@ const LocateTable = ({
                                                     />
                                                 </Box>
                                             ) : (
-                                                <Stack direction="row" spacing={1}>
+                                                <Stack direction={isMobile ? "column" : "row"} spacing={isMobile ? 0.5 : 1}>
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
                                                         onClick={() => onMarkCalled(item.workOrderId, 'STANDARD')}
-                                                        startIcon={<PhoneCall size={14} />}
+                                                        startIcon={isMobile ? null : <PhoneCall size={14} />}
                                                         disabled={markCalledMutation?.isPending}
                                                         sx={{
                                                             textTransform: 'none',
-                                                            fontSize: '0.75rem',
-                                                            height: '30px',
-                                                            px: 1.5,
+                                                            fontSize: isMobile ? '0.7rem' : '0.75rem',
+                                                            height: isMobile ? '28px' : '30px',
+                                                            px: isMobile ? 1 : 1.5,
+                                                            minWidth: isMobile ? '80px' : 'auto',
+                                                            whiteSpace: 'nowrap',
                                                         }}
                                                     >
-                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === item.workOrderId ? 'Calling...' : 'Standard'}
+                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === item.workOrderId ?
+                                                            (isMobile ? '...' : 'Calling...') :
+                                                            (isMobile ? 'Standard' : 'Standard')}
                                                     </Button>
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
                                                         color="error"
                                                         onClick={() => onMarkCalled(item.workOrderId, 'EMERGENCY')}
-                                                        startIcon={<AlertTriangle size={14} />}
+                                                        startIcon={isMobile ? null : <AlertTriangle size={14} />}
                                                         disabled={markCalledMutation?.isPending}
                                                         sx={{
                                                             textTransform: 'none',
-                                                            fontSize: '0.75rem',
-                                                            height: '30px',
-                                                            px: 1.5,
+                                                            fontSize: isMobile ? '0.7rem' : '0.75rem',
+                                                            height: isMobile ? '28px' : '30px',
+                                                            px: isMobile ? 1 : 1.5,
+                                                            minWidth: isMobile ? '80px' : 'auto',
+                                                            whiteSpace: 'nowrap',
                                                         }}
                                                     >
-                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === item.workOrderId ? 'Calling...' : 'Emergency'}
+                                                        {markCalledMutation?.isPending && markCalledMutation.variables?.id === item.workOrderId ?
+                                                            (isMobile ? '...' : 'Calling...') :
+                                                            (isMobile ? 'Emergency' : 'Emergency')}
                                                     </Button>
                                                 </Stack>
                                             )}
@@ -2381,18 +2724,23 @@ const LocateTable = ({
                                     )}
 
                                     {showTimerColumn && (
-                                        <TableCell sx={{ py: 1.5 }}>
+                                        <TableCell sx={{
+                                            py: 1.5,
+                                            minWidth: 120,
+                                            maxWidth: 160,
+                                        }}>
                                             {item.timeRemainingText ? (
                                                 <Tooltip title={item.timeRemainingDetail}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                        <Clock size={16} color={item.timeRemainingColor} />
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                        <Clock size={isMobile ? 14 : 16} color={item.timeRemainingColor} />
                                                         <Typography
                                                             variant="body2"
                                                             sx={{
                                                                 color: item.timeRemainingColor,
-                                                                fontSize: '0.85rem',
+                                                                fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                                 fontWeight: item.timeRemainingText === 'EXPIRED' ? 600 : 400,
-                                                                fontFamily: item.callType === 'Emergency' || item.callType === 'EMERGENCY' ? 'monospace' : 'inherit'
+                                                                fontFamily: item.callType === 'Emergency' || item.callType === 'EMERGENCY' ? 'monospace' : 'inherit',
+                                                                whiteSpace: 'nowrap',
                                                             }}
                                                         >
                                                             {item.timeRemainingText}
@@ -2404,8 +2752,9 @@ const LocateTable = ({
                                                     variant="body2"
                                                     sx={{
                                                         color: GRAY_COLOR,
-                                                        fontSize: '0.85rem',
+                                                        fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                         fontWeight: 400,
+                                                        whiteSpace: 'nowrap',
                                                     }}
                                                 >
                                                     —
@@ -2414,21 +2763,26 @@ const LocateTable = ({
                                         </TableCell>
                                     )}
 
-                                    <TableCell sx={{ py: 1.5 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                    <TableCell sx={{
+                                        py: 1.5,
+                                        minWidth: 150,
+                                    }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
                                             {hasCheckmark && (
                                                 <Tooltip title={`Called by ${item.calledByName}`}>
-                                                    <CheckCircle size={16} color={RED_COLOR} />
+                                                    <CheckCircle size={isMobile ? 14 : 16} color={RED_COLOR} />
                                                 </Tooltip>
                                             )}
-                                            <Box>
+                                            <Box sx={{ flex: 1 }}>
                                                 <Typography
                                                     variant="body2"
                                                     sx={{
                                                         color: TEXT_COLOR,
-                                                        fontSize: '0.85rem',
+                                                        fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                         fontWeight: 500,
                                                         mb: 0.25,
+                                                        wordBreak: 'break-word',
+                                                        overflowWrap: 'break-word',
                                                     }}
                                                 >
                                                     {item.customerName}
@@ -2440,40 +2794,29 @@ const LocateTable = ({
                                                         fontSize: '0.75rem',
                                                         fontWeight: 400,
                                                         display: 'block',
-                                                        mb: 0.5,
+                                                        wordBreak: 'break-word',
+                                                        overflowWrap: 'break-word',
                                                     }}
                                                 >
                                                     WO: {item.workOrderNumber}
                                                 </Typography>
-                                                {item.priorityName && item.priorityName !== 'Standard' && (
-                                                    <Chip
-                                                        label={item.priorityName}
-                                                        size="small"
-                                                        sx={{
-                                                            color: TEXT_COLOR,
-                                                            fontSize: '0.7rem',
-                                                            height: '20px',
-                                                            fontWeight: 500,
-                                                            backgroundColor: alpha(color, 0.1),
-                                                            border: `1px solid ${alpha(color, 0.2)}`,
-                                                            '& .MuiChip-label': {
-                                                                px: 1,
-                                                            },
-                                                        }}
-                                                    />
-                                                )}
                                             </Box>
                                         </Box>
                                     </TableCell>
 
-                                    <TableCell sx={{ py: 1.5 }}>
+                                    <TableCell sx={{
+                                        py: 1.5,
+                                        minWidth: 180,
+                                    }}>
                                         <Typography
                                             variant="body2"
                                             sx={{
                                                 color: TEXT_COLOR,
-                                                fontSize: '0.85rem',
+                                                fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                 fontWeight: 400,
                                                 mb: 0.25,
+                                                wordBreak: 'break-word',
+                                                overflowWrap: 'break-word',
                                             }}
                                         >
                                             {addressLine}
@@ -2485,6 +2828,8 @@ const LocateTable = ({
                                                     color: GRAY_COLOR,
                                                     fontSize: '0.75rem',
                                                     fontWeight: 400,
+                                                    wordBreak: 'break-word',
+                                                    overflowWrap: 'break-word',
                                                 }}
                                             >
                                                 {location}
@@ -2492,7 +2837,10 @@ const LocateTable = ({
                                         )}
                                     </TableCell>
 
-                                    <TableCell sx={{ py: 1.5 }}>
+                                    <TableCell sx={{
+                                        py: 1.5,
+                                        minWidth: 180,
+                                    }}>
                                         <Stack spacing={0.5}>
                                             {tableType === 'completed' ? (
                                                 <>
@@ -2505,19 +2853,25 @@ const LocateTable = ({
                                                                 fontWeight: 400,
                                                                 display: 'block',
                                                                 mb: 0,
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'break-word',
                                                             }}
                                                         >
-                                                            Locate Triggered:
+                                                            {isMobile ? 'Triggered:' : 'Locate Triggered:'}
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
                                                                     color: BLUE_COLOR,
-                                                                    fontSize: '0.75rem',
+                                                                    fontSize: isMobile ? '0.75rem' : '0.75rem',
                                                                     fontWeight: 500,
-                                                                    ml: 1,
+                                                                    ml: 0.5,
+                                                                    wordBreak: 'break-word',
+                                                                    overflowWrap: 'break-word',
                                                                 }}
                                                             >
-                                                                {formatDate(item.locateTriggeredDate)}
+                                                                {isMobile ?
+                                                                    formatDateShort(item.locateTriggeredDate) :
+                                                                    formatDate(item.locateTriggeredDate)}
                                                             </Typography>
                                                         </Typography>
                                                     </Box>
@@ -2530,33 +2884,41 @@ const LocateTable = ({
                                                                 fontSize: '0.7rem',
                                                                 fontWeight: 400,
                                                                 display: 'block',
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'break-word',
                                                             }}
                                                         >
-                                                            Locate Called In:
+                                                            {isMobile ? 'Called:' : 'Locate Called In:'}
                                                             {item.locateCalledInDate ? (
                                                                 <Typography
                                                                     variant="caption"
                                                                     sx={{
                                                                         color: ORANGE_COLOR,
-                                                                        fontSize: '0.75rem',
+                                                                        fontSize: isMobile ? '0.75rem' : '0.75rem',
                                                                         fontWeight: 500,
-                                                                        ml: 1,
+                                                                        ml: 0.5,
+                                                                        wordBreak: 'break-word',
+                                                                        overflowWrap: 'break-word',
                                                                     }}
                                                                 >
-                                                                    {formatDate(item.locateCalledInDate)}
+                                                                    {isMobile ?
+                                                                        formatDateShort(item.locateCalledInDate) :
+                                                                        formatDate(item.locateCalledInDate)}
                                                                 </Typography>
                                                             ) : (
                                                                 <Typography
                                                                     variant="caption"
                                                                     sx={{
                                                                         color: GRAY_COLOR,
-                                                                        fontSize: '0.75rem',
+                                                                        fontSize: isMobile ? '0.75rem' : '0.75rem',
                                                                         fontWeight: 400,
                                                                         fontStyle: 'italic',
-                                                                        ml: 1,
+                                                                        ml: 0.5,
+                                                                        wordBreak: 'break-word',
+                                                                        overflowWrap: 'break-word',
                                                                     }}
                                                                 >
-                                                                    Not called yet
+                                                                    {isMobile ? 'Not called' : 'Not called yet'}
                                                                 </Typography>
                                                             )}
                                                         </Typography>
@@ -2569,31 +2931,39 @@ const LocateTable = ({
                                                                 color: GRAY_COLOR,
                                                                 fontSize: '0.7rem',
                                                                 fontWeight: 400,
-                                                                display: 'block'
+                                                                display: 'block',
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'break-word',
                                                             }}
                                                         >
-                                                            Clear-to-Dig:
+                                                            {isMobile ? 'Clear:' : 'Clear-to-Dig:'}
                                                             {item.clearToDigDate ? (
                                                                 <Typography
                                                                     variant="caption"
                                                                     sx={{
                                                                         color: GREEN_COLOR,
-                                                                        fontSize: '0.75rem',
+                                                                        fontSize: isMobile ? '0.75rem' : '0.75rem',
                                                                         fontWeight: 500,
-                                                                        ml: 1,
+                                                                        ml: 0.5,
+                                                                        wordBreak: 'break-word',
+                                                                        overflowWrap: 'break-word',
                                                                     }}
                                                                 >
-                                                                    {formatDate(item.clearToDigDate)}
+                                                                    {isMobile ?
+                                                                        formatDateShort(item.clearToDigDate) :
+                                                                        formatDate(item.clearToDigDate)}
                                                                 </Typography>
                                                             ) : (
                                                                 <Typography
                                                                     variant="caption"
                                                                     sx={{
                                                                         color: GRAY_COLOR,
-                                                                        fontSize: '0.75rem',
+                                                                        fontSize: isMobile ? '0.75rem' : '0.75rem',
                                                                         fontWeight: 400,
                                                                         fontStyle: 'italic',
-                                                                        ml: 1,
+                                                                        ml: 0.5,
+                                                                        wordBreak: 'break-word',
+                                                                        overflowWrap: 'break-word',
                                                                     }}
                                                                 >
                                                                     Pending
@@ -2611,129 +2981,146 @@ const LocateTable = ({
                                                             fontSize: '0.7rem',
                                                             fontWeight: 400,
                                                             display: 'block',
-                                                            mb: 0.5,
+                                                            mb: 0.25,
+                                                            wordBreak: 'break-word',
+                                                            overflowWrap: 'break-word',
                                                         }}
                                                     >
-                                                        Locate Called:
+                                                        {isMobile ? 'Called:' : 'Locate Called:'}
                                                     </Typography>
                                                     <Typography
                                                         variant="caption"
                                                         sx={{
                                                             color: ORANGE_COLOR,
-                                                            fontSize: '0.75rem',
+                                                            fontSize: isMobile ? '0.75rem' : '0.75rem',
                                                             fontWeight: 500,
+                                                            wordBreak: 'break-word',
+                                                            overflowWrap: 'break-word',
                                                         }}
                                                     >
-                                                        {getCalledAtDate(item)}
+                                                        {isMobile ?
+                                                            formatDateShort(item.calledAt) :
+                                                            getCalledAtDate(item)}
                                                     </Typography>
                                                 </Box>
                                             ) : (
                                                 <>
                                                     <Box>
-                                                        <Box>
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: GRAY_COLOR,
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 400,
+                                                                display: 'block',
+                                                                mb: 0.25,
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'break-word',
+                                                            }}
+                                                        >
+                                                            {isMobile ? 'Triggered:' : 'Triggered Locate:'}
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
-                                                                    color: GRAY_COLOR,
-                                                                    fontSize: '0.7rem',
-                                                                    fontWeight: 400,
-                                                                    display: 'block'
+                                                                    color: BLUE_COLOR,
+                                                                    fontSize: isMobile ? '0.75rem' : '0.75rem',
+                                                                    fontWeight: 500,
+                                                                    ml: 0.5,
+                                                                    wordBreak: 'break-word',
+                                                                    overflowWrap: 'break-word',
                                                                 }}
                                                             >
-                                                                Triggered Locate:
-                                                                <Typography
-                                                                    variant="caption"
-                                                                    sx={{
-                                                                        color: BLUE_COLOR,
-                                                                        fontSize: '0.75rem',
-                                                                        fontWeight: 500,
-                                                                        ml: 1,
-                                                                    }}
-                                                                >
-                                                                    {formatDate(item.locateTriggeredDate)}
-                                                                </Typography>
+                                                                {isMobile ?
+                                                                    formatDateShort(item.locateTriggeredDate) :
+                                                                    formatDate(item.locateTriggeredDate)}
                                                             </Typography>
-                                                        </Box>
-                                                        <Box>
+                                                        </Typography>
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: GRAY_COLOR,
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 400,
+                                                                display: 'block',
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'break-word',
+                                                            }}
+                                                        >
+                                                            {isMobile ? 'Target:' : 'Target Work Date:'}
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
-                                                                    color: GRAY_COLOR,
-                                                                    fontSize: '0.7rem',
-                                                                    fontWeight: 400,
-                                                                    display: 'block'
+                                                                    color: GREEN_COLOR,
+                                                                    fontSize: isMobile ? '0.75rem' : '0.75rem',
+                                                                    fontWeight: 500,
+                                                                    ml: 0.5,
+                                                                    wordBreak: 'break-word',
+                                                                    overflowWrap: 'break-word',
                                                                 }}
                                                             >
-                                                                Target Work Date:
-                                                                <Typography
-                                                                    variant="caption"
-                                                                    sx={{
-                                                                        color: GREEN_COLOR,
-                                                                        fontSize: '0.75rem',
-                                                                        fontWeight: 500,
-                                                                        ml: 1,
-                                                                    }}
-                                                                >
-                                                                    {item.targetWorkDate}
-                                                                </Typography>
+                                                                {item.targetWorkDate}
                                                             </Typography>
-                                                        </Box>
+                                                        </Typography>
                                                     </Box>
                                                 </>
                                             )}
                                         </Stack>
                                     </TableCell>
 
-                                    <TableCell sx={{ py: 1.5 }}>
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                            <Avatar sx={{
-                                                width: 28,
-                                                height: 28,
-                                                bgcolor: color,
-                                                fontSize: '0.85rem',
-                                                fontWeight: 600,
-                                            }}>
-                                                {item.techName?.charAt(0) || '?'}
-                                            </Avatar>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: TEXT_COLOR,
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: 400,
-                                                }}
-                                            >
-                                                {item.techName}
-                                            </Typography>
-                                        </Stack>
+                                    <TableCell sx={{
+                                        py: 1.5,
+                                        minWidth: 120,
+                                    }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: TEXT_COLOR,
+                                                fontSize: isMobile ? '0.8rem' : '0.85rem',
+                                                fontWeight: 400,
+                                                wordBreak: 'break-word',
+                                                overflowWrap: 'break-word',
+                                            }}
+                                        >
+                                            {item.techName}
+                                        </Typography>
                                     </TableCell>
 
                                     {showCalledBy && (
-                                        <TableCell sx={{ py: 1.5 }}>
+                                        <TableCell sx={{
+                                            py: 1.5,
+                                            minWidth: 150,
+                                            maxWidth: 200,
+                                        }}>
                                             {item.calledByName ? (
                                                 <Box>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                        <User size={14} color={TEXT_COLOR} />
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                        <User size={isMobile ? 12 : 14} color={TEXT_COLOR} />
                                                         <Typography
                                                             variant="body2"
                                                             sx={{
                                                                 color: TEXT_COLOR,
-                                                                fontSize: '0.85rem',
+                                                                fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                                 fontWeight: 500,
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'break-word',
                                                             }}
                                                         >
                                                             {item.calledByName}
                                                         </Typography>
                                                     </Box>
-                                                    {item.calledByEmail && (
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                                            <Mail size={12} color={GRAY_COLOR} />
+                                                    {item.calledByEmail && !isMobile && (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                                                            <Mail size={10} color={GRAY_COLOR} />
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
                                                                     color: GRAY_COLOR,
-                                                                    fontSize: '0.75rem',
+                                                                    fontSize: '0.7rem',
                                                                     fontWeight: 400,
+                                                                    wordBreak: 'break-word',
+                                                                    overflowWrap: 'break-word',
                                                                 }}
                                                             >
                                                                 {item.calledByEmail}
@@ -2746,8 +3133,10 @@ const LocateTable = ({
                                                     variant="body2"
                                                     sx={{
                                                         color: GRAY_COLOR,
-                                                        fontSize: '0.85rem',
+                                                        fontSize: isMobile ? '0.8rem' : '0.85rem',
                                                         fontWeight: 400,
+                                                        wordBreak: 'break-word',
+                                                        overflowWrap: 'break-word',
                                                     }}
                                                 >
                                                     —
@@ -2757,7 +3146,12 @@ const LocateTable = ({
                                     )}
 
                                     {showManualCompleteAction && tableType === 'inProgress' && (
-                                        <TableCell sx={{ py: 1.5 }}>
+                                        <TableCell sx={{
+                                            py: 1.5,
+                                            width: '80px',
+                                            minWidth: '80px',
+                                            maxWidth: '80px',
+                                        }}>
                                             {renderManualCompleteButton(item)}
                                         </TableCell>
                                     )}
@@ -2770,7 +3164,7 @@ const LocateTable = ({
 
             {totalCount > 0 && (
                 <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    rowsPerPageOptions={isMobile ? [5, 10, 25] : [5, 10, 25, 50]}
                     component="div"
                     count={totalCount}
                     rowsPerPage={rowsPerPage}
@@ -2784,7 +3178,7 @@ const LocateTable = ({
                             padding: '0 16px',
                         },
                         '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                            fontSize: '0.8rem',
+                            fontSize: isMobile ? '0.75rem' : '0.8rem',
                             color: TEXT_COLOR,
                             fontWeight: 400,
                         },

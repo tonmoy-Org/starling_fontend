@@ -18,7 +18,6 @@ import {
     ChevronUp,
     Briefcase,
     Truck,
-    Map,
     ListChecks,
     SignalHigh,
     GraduationCap,
@@ -39,7 +38,6 @@ import {
     MapPinIcon,
     TruckIcon,
 } from 'lucide-react';
-import { TollOutlined } from '@mui/icons-material';
 
 export const ManagerMenuComponent = ({ onMenuItemClick }) => {
     const [expandedSections, setExpandedSections] = useState({

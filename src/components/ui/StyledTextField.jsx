@@ -2,7 +2,7 @@ import { TextField, styled } from '@mui/material';
 
 const StyledTextField = styled(TextField)(({ theme }) => ({
     "& .MuiOutlinedInput-root": {
-        borderRadius: "8px",
+        borderRadius: "2px",
         "&:hover fieldset": {
             borderColor: "#1976d2",
         },

@@ -761,7 +761,7 @@ const ProfileDialog = ({ open, onClose, user, userRole }) => {
   );
 };
 
-const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handleNavigation, isMobile, location, onCloseDrawer }) => {
+const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handleNavigation, isMobile, location, onCloseDrawer, onExpandToggle }) => {
   const isExpandable = item.isExpandable;
   const isExpanded = item.expanded;
   const [hoverMenuAnchor, setHoverMenuAnchor] = React.useState(null);
@@ -816,19 +816,29 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
     event.preventDefault();
     event.stopPropagation();
 
-    // Close drawer on mobile after navigation
-    if (isMobile && onCloseDrawer) {
-      onCloseDrawer();
+    // If item is expandable and has no path, just toggle expansion
+    if (isExpandable && !item.path) {
+      if (onExpandToggle) {
+        onExpandToggle(item.text);
+      }
+      return;
     }
 
-    // Check if it's an external URL (starts with http:// or https://)
-    if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
-      // Open external link in new tab
-      window.open(item.path, '_blank');
+    // If item has a path (navigation item), handle navigation
+    if (item.path) {
+      // Check if it's an external URL (starts with http:// or https://)
+      if (item.path.startsWith('http://') || item.path.startsWith('https://')) {
+        // Open external link in new tab
+        window.open(item.path, '_blank');
+      } else {
+        // Internal navigation - close drawer on mobile
+        handleNavigation(item.path);
+        if (isMobile && onCloseDrawer) {
+          onCloseDrawer();
+        }
+      }
     } else if (item.onClick) {
       item.onClick(event);
-    } else if (item.path) {
-      handleNavigation(item.path);
     }
     setHoverMenuAnchor(null);
   };
@@ -1083,6 +1093,7 @@ const NestedMenuItem = ({ item, level = 0, isDrawerOpen, getActiveStyles, handle
               isMobile={isMobile}
               location={location}
               onCloseDrawer={onCloseDrawer}
+              onExpandToggle={onExpandToggle}
             />
           ))}
         </List>
@@ -1105,6 +1116,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
   const [menuAnchorEl, setMenuAnchorEl] = React.useState(null);
   const [profileDialogOpen, setProfileDialogOpen] = React.useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
+  const [expandedItems, setExpandedItems] = React.useState(new Set());
 
   React.useEffect(() => {
     setOpen(!isMobile);
@@ -1227,6 +1239,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
         navigate(path);
       }
 
+      // Close drawer on mobile after actual navigation
       if (isMobile) {
         setOpen(false);
       }
@@ -1236,6 +1249,10 @@ export default function DashboardLayout({ children, title, menuItems }) {
   const handleBreadcrumbClick = (path) => {
     if (path) {
       navigate(path);
+      // Close drawer on mobile after breadcrumb navigation
+      if (isMobile) {
+        setOpen(false);
+      }
     }
   };
 
@@ -1250,6 +1267,31 @@ export default function DashboardLayout({ children, title, menuItems }) {
   const handleMobileSearchClose = () => {
     setMobileSearchOpen(false);
   };
+
+  const handleExpandToggle = (itemText) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemText)) {
+        newSet.delete(itemText);
+      } else {
+        newSet.add(itemText);
+      }
+      return newSet;
+    });
+  };
+
+  const processMenuItems = (items) => {
+    return items.map(item => ({
+      ...item,
+      expanded: expandedItems.has(item.text),
+      subItems: item.subItems ? processMenuItems(item.subItems) : undefined,
+    }));
+  };
+
+  const processedMenuItems = menuItems?.map(section => ({
+    ...section,
+    items: processMenuItems(section.items || [])
+  }));
 
   const renderDrawerContent = () => (
     <Box sx={{
@@ -1313,7 +1355,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
         </Box>
       </DrawerHeader>
       <ScrollableBox sx={{ py: 0.5 }}>
-        {menuItems?.map((section, sectionIndex) => (
+        {processedMenuItems?.map((section, sectionIndex) => (
           <React.Fragment key={sectionIndex}>
             {open && section.sectionName && (
               <Box sx={{
@@ -1349,6 +1391,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
                   isMobile={isMobile}
                   location={location}
                   onCloseDrawer={handleDrawerClose}
+                  onExpandToggle={handleExpandToggle}
                 />
               ))}
             </List>
@@ -1915,7 +1958,7 @@ export default function DashboardLayout({ children, title, menuItems }) {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            p: { xs: 1, sm: 2 },
+            p: { xs: 1, sm: 1 },
             pt: { xs: 3, md: 2.5 },
             overflow: 'hidden',
           }}

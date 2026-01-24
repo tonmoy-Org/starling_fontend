@@ -32,9 +32,7 @@ import { alpha } from '@mui/material/styles';
 import axiosInstance from '../../../api/axios';
 import { useAuth } from '../../../auth/AuthProvider';
 import {
-    addBusinessDays,
     addHours,
-    isWeekend,
     addDays,
     format,
     parseISO,
@@ -69,13 +67,16 @@ const ORANGE_COLOR = '#ed6c02';
 const GRAY_COLOR = '#6b7280';
 const PURPLE_COLOR = '#8b5cf6';
 
-// Helper functions for Pacific Time (GMT-8)
+// Timezone constants - Pacific Time (GMT-8)
+const TIMEZONE_OFFSET = -8 * 60 * 60 * 1000; // GMT-8 in milliseconds
+
+// Helper functions for timezone handling
 const toPacificTime = (dateString) => {
     if (!dateString) return null;
     try {
+        // If date is in UTC, convert to Pacific Time (GMT-8)
         const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
-        // If date is already in UTC, convert to Pacific Time (GMT-8)
-        return new Date(date.getTime() - (8 * 60 * 60 * 1000));
+        return new Date(date.getTime() + TIMEZONE_OFFSET);
     } catch (e) {
         console.error('Error converting to Pacific Time:', e);
         return null;
@@ -86,17 +87,23 @@ const toUTC = (pacificTime) => {
     if (!pacificTime) return null;
     try {
         // Convert Pacific Time to UTC (add 8 hours)
-        return new Date(pacificTime.getTime() + (8 * 60 * 60 * 1000));
+        return new Date(pacificTime.getTime() - TIMEZONE_OFFSET);
     } catch (e) {
         console.error('Error converting to UTC:', e);
         return null;
     }
 };
 
+// Get current time in Pacific Time
+const getCurrentPacificTime = () => {
+    const now = new Date();
+    return new Date(now.getTime() + TIMEZONE_OFFSET);
+};
+
 const formatDate = (dateString) => {
     if (!dateString) return '—';
     try {
-        const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+        const date = toPacificTime(dateString);
         return format(date, 'MMM dd, yyyy HH:mm');
     } catch (e) {
         return '—';
@@ -106,7 +113,7 @@ const formatDate = (dateString) => {
 const formatDateShort = (dateString) => {
     if (!dateString) return '—';
     try {
-        const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+        const date = toPacificTime(dateString);
         return format(date, 'MMM dd, HH:mm');
     } catch (e) {
         return '—';
@@ -116,7 +123,7 @@ const formatDateShort = (dateString) => {
 const formatMonthDay = (dateString) => {
     if (!dateString) return '—';
     try {
-        const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+        const date = toPacificTime(dateString);
         return format(date, 'MMM dd');
     } catch (e) {
         return '—';
@@ -125,15 +132,27 @@ const formatMonthDay = (dateString) => {
 
 const formatTimeRemaining = (remainingMs) => {
     if (remainingMs <= 0) return 'EXPIRED';
-    
-    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
-    
-    if (days > 0) {
-        return `${days}d ${hours}h`;
-    } else if (hours > 0) {
+
+    // For display purposes, round to the nearest hour when we have more than a day
+    if (remainingMs > 24 * 60 * 60 * 1000) {
+        // Round to nearest hour
+        const hours = Math.round(remainingMs / (60 * 60 * 1000));
+        const days = Math.floor(hours / 24);
+        const remainingHours = hours % 24;
+
+        if (days > 0) {
+            return `${days}d ${remainingHours}h`;
+        } else {
+            return `${hours}h`;
+        }
+    }
+
+    const totalSeconds = Math.floor(remainingMs / 1000);
+    const hours = Math.floor(totalSeconds / (60 * 60));
+    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
         return `${hours}h ${minutes}m`;
     } else if (minutes > 0) {
         return `${minutes}m ${seconds}s`;
@@ -144,19 +163,20 @@ const formatTimeRemaining = (remainingMs) => {
 
 const calculateExpirationDate = (calledAt, callType) => {
     if (!calledAt || !callType) return null;
-    
+
     try {
-        const calledDate = typeof calledAt === 'string' ? parseISO(calledAt) : calledAt;
-        
+        // Convert called_at to Pacific Time
+        const calledDate = toPacificTime(calledAt);
+        if (!calledDate) return null;
+
         if (callType === 'EMERGENCY' || callType === 'Emergency') {
-            // Emergency: 4 hours from called time
+            // Emergency: 4 hours from called time IN PACIFIC TIME
             return addHours(calledDate, 4);
         } else if (callType === 'STANDARD' || callType === 'Standard') {
-            // Standard: 2 calendar days (48 hours) from called time
-            // NO WEEKENDS - exact 2 calendar days
+            // Standard: 2 calendar days (48 hours) from called time IN PACIFIC TIME
             return addDays(calledDate, 2);
         }
-        
+
         return null;
     } catch (e) {
         console.error('Error calculating expiration:', e);
@@ -166,11 +186,23 @@ const calculateExpirationDate = (calledAt, callType) => {
 
 const isTimerExpired = (calledAt, callType) => {
     if (!calledAt || !callType) return true;
-    
+
     const expirationDate = calculateExpirationDate(calledAt, callType);
     if (!expirationDate) return true;
-    
-    return isAfter(new Date(), expirationDate);
+
+    // Compare in Pacific Time
+    const nowPacific = getCurrentPacificTime();
+    return isAfter(nowPacific, expirationDate);
+};
+
+const getTimeRemainingMs = (calledAt, callType) => {
+    if (!calledAt || !callType) return 0;
+
+    const expirationDate = calculateExpirationDate(calledAt, callType);
+    if (!expirationDate) return 0;
+
+    const nowPacific = getCurrentPacificTime();
+    return expirationDate.getTime() - nowPacific.getTime();
 };
 
 const parseDashboardAddress = (fullAddress) => {
@@ -202,8 +234,10 @@ const formatTargetWorkDate = (scheduledDateRaw) => {
         const [month, day, year] = datePart.split('/').map(Number);
         if (!month || !day || !year) return 'ASAP';
 
+        // Create date in Pacific Time
         const date = new Date(year, month - 1, day);
-        return format(date, 'MMM dd, yyyy');
+        const pacificDate = toPacificTime(date);
+        return format(pacificDate, 'MMM dd, yyyy');
     } catch (e) {
         console.error('Error formatting target work date:', e);
         return 'ASAP';
@@ -220,7 +254,7 @@ const Locates = () => {
     const currentUserName = user?.name || 'Admin User';
     const currentUserEmail = user?.email || 'admin@company.com';
 
-    const [currentTime, setCurrentTime] = useState(() => new Date());
+    const [currentTime, setCurrentTime] = useState(() => getCurrentPacificTime());
 
     const [selectedPending, setSelectedPending] = useState(new Set());
     const [selectedInProgress, setSelectedInProgress] = useState(new Set());
@@ -262,10 +296,10 @@ const Locates = () => {
 
     const [recycleBinCount, setRecycleBinCount] = useState(0);
 
-    // Update current time every second for live countdown
+    // Update current time every second for live countdown (in Pacific Time)
     useEffect(() => {
         const timer = setInterval(() => {
-            setCurrentTime(new Date());
+            setCurrentTime(getCurrentPacificTime());
         }, 1000);
 
         return () => clearInterval(timer);
@@ -296,10 +330,11 @@ const Locates = () => {
             if (itemsToExpire.length > 0) {
                 try {
                     const promises = itemsToExpire.map(async (item) => {
+                        const completeTimeUTC = toUTC(getCurrentPacificTime());
                         await axiosInstance.patch(`/locates/${item.id}/`, {
                             timer_expired: true,
                             time_remaining: 'EXPIRED',
-                            completed_at: new Date().toISOString(),
+                            completed_at: completeTimeUTC ? completeTimeUTC.toISOString() : new Date().toISOString(),
                         });
                     });
 
@@ -346,7 +381,7 @@ const Locates = () => {
 
     const markCalledMutation = useMutation({
         mutationFn: async ({ id, callType }) => {
-            const calledDate = new Date();
+            const calledDate = getCurrentPacificTime();
             const calledDateUTC = toUTC(calledDate);
 
             const response = await axiosInstance.patch(
@@ -375,7 +410,7 @@ const Locates = () => {
 
     const softDeleteBulkMutation = useMutation({
         mutationFn: async (ids) => {
-            const deleteTime = new Date();
+            const deleteTime = getCurrentPacificTime();
             const deleteTimeUTC = toUTC(deleteTime);
 
             const promises = Array.from(ids).map(id =>
@@ -405,7 +440,7 @@ const Locates = () => {
 
     const completeWorkOrderManuallyMutation = useMutation({
         mutationFn: async (id) => {
-            const completeTime = new Date();
+            const completeTime = getCurrentPacificTime();
             const completeTimeUTC = toUTC(completeTime);
 
             const response = await axiosInstance.patch(`/locates/${id}/`, {
@@ -429,7 +464,7 @@ const Locates = () => {
 
     const bulkCompleteWorkOrdersMutation = useMutation({
         mutationFn: async (ids) => {
-            const completeTime = new Date();
+            const completeTime = getCurrentPacificTime();
             const completeTimeUTC = toUTC(completeTime);
 
             const promises = Array.from(ids).map(id =>
@@ -561,7 +596,7 @@ const Locates = () => {
 
                 // Check if timer is expired (either already marked or time has passed)
                 const isAlreadyExpired = item.timer_expired === true;
-                const shouldBeExpired = item.locates_called && item.called_at && item.call_type 
+                const shouldBeExpired = item.locates_called && item.called_at && item.call_type
                     ? isTimerExpired(item.called_at, item.call_type)
                     : false;
 
@@ -571,8 +606,9 @@ const Locates = () => {
                     expirationDate = calculateExpirationDate(item.called_at, item.call_type);
 
                     if (expirationDate) {
-                        const now = currentTime;
-                        const remainingMs = expirationDate.getTime() - now.getTime();
+                        // Calculate remaining time in Pacific Time
+                        const nowPacific = currentTime;
+                        const remainingMs = expirationDate.getTime() - nowPacific.getTime();
 
                         if (isExpired) {
                             timeRemainingText = 'EXPIRED';
@@ -633,6 +669,7 @@ const Locates = () => {
                     clearToDigDate: item.completed_at || '',
                     targetWorkDate: targetWorkDate,
                     scheduledDateRaw: item.scheduled_date || 'ASAP',
+                    isEmergency: isEmergency,
                 };
             });
     }, [rawData, currentTime]);
@@ -2454,6 +2491,16 @@ const LocateTable = ({
     isMobile,
 }) => {
     const isSmallMobile = useMediaQuery('(max-width: 600px)');
+    const [currentTime, setCurrentTime] = useState(() => getCurrentPacificTime());
+
+    // Update time every second for real-time countdown (in Pacific Time)
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(getCurrentPacificTime());
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
 
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
@@ -2479,6 +2526,51 @@ const LocateTable = ({
             );
         }
         return null;
+    };
+
+    // Calculate real-time remaining for each item
+    const getRealTimeRemaining = (item) => {
+        if (!item.locatesCalled || !item.calledAt || !item.callType || item.isExpired) {
+            return { text: item.timeRemainingText, color: item.timeRemainingColor, detail: item.timeRemainingDetail };
+        }
+
+        const expirationDate = calculateExpirationDate(item.calledAt, item.callType);
+        if (!expirationDate) {
+            return { text: '—', color: GRAY_COLOR, detail: '' };
+        }
+
+        // Calculate remaining time in Pacific Time
+        const nowPacific = currentTime;
+        const remainingMs = expirationDate.getTime() - nowPacific.getTime();
+
+        // Add a small buffer to prevent showing "1d 23h" when it should be "2d 0h"
+        const buffer = 1000; // 1 second buffer
+
+        if (remainingMs <= 0) {
+            return { text: 'EXPIRED', color: RED_COLOR, detail: `Expired on: ${format(expirationDate, 'MMM dd, yyyy HH:mm')}` };
+        }
+
+        const text = formatTimeRemaining(remainingMs + buffer); // Add buffer to prevent off-by-one errors
+        const detail = `Expires at: ${format(expirationDate, 'MMM dd, yyyy HH:mm')}`;
+
+        let timeRemainingColor = TEXT_COLOR;
+        if (item.isEmergency) {
+            if (remainingMs <= 60 * 60 * 1000) { // 1 hour or less
+                timeRemainingColor = RED_COLOR;
+            } else if (remainingMs <= 2 * 60 * 60 * 1000) { // 2 hours or less
+                timeRemainingColor = ORANGE_COLOR;
+            } else {
+                timeRemainingColor = BLUE_COLOR;
+            }
+        } else {
+            if (remainingMs <= 24 * 60 * 60 * 1000) { // 1 day or less
+                timeRemainingColor = ORANGE_COLOR;
+            } else {
+                timeRemainingColor = BLUE_COLOR;
+            }
+        }
+
+        return { text, color: timeRemainingColor, detail };
     };
 
     return (
@@ -2630,6 +2722,7 @@ const LocateTable = ({
                             const addressLine = item.street || item.original || '—';
                             const location = [item.city, item.state, item.zip].filter(Boolean).join(', ');
                             const hasCheckmark = item.locatesCalled && item.calledByName;
+                            const timeRemaining = getRealTimeRemaining(item);
 
                             return (
                                 <TableRow
@@ -2747,20 +2840,20 @@ const LocateTable = ({
                                             minWidth: 120,
                                             maxWidth: 160,
                                         }}>
-                                            {item.timeRemainingText ? (
-                                                <Tooltip title={item.timeRemainingDetail}>
+                                            {item.locatesCalled && item.calledAt && item.callType ? (
+                                                <Tooltip title={timeRemaining.detail}>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                        <Clock size={isMobile ? 14 : 16} color={item.timeRemainingColor} />
+                                                        <Clock size={isMobile ? 14 : 16} color={timeRemaining.color} />
                                                         <Typography
                                                             variant="body2"
                                                             sx={{
-                                                                color: item.timeRemainingColor,
+                                                                color: timeRemaining.color,
                                                                 fontSize: isMobile ? '0.8rem' : '0.85rem',
-                                                                fontWeight: item.timeRemainingText === 'EXPIRED' ? 600 : 400,
+                                                                fontWeight: timeRemaining.text === 'EXPIRED' ? 600 : 400,
                                                                 whiteSpace: 'nowrap',
                                                             }}
                                                         >
-                                                            {item.timeRemainingText}
+                                                            {timeRemaining.text}
                                                         </Typography>
                                                     </Box>
                                                 </Tooltip>

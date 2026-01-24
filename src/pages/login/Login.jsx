@@ -18,7 +18,6 @@ import {
   CircularProgress,
   Container,
   alpha,
-  Link,
   InputAdornment,
   IconButton,
   Checkbox,
@@ -26,7 +25,7 @@ import {
 } from '@mui/material';
 import GradientButton from '../../components/ui/GradientButton';
 import StyledTextField from '../../components/ui/StyledTextField';
-import logo from '../../public/favicon/logo.png'
+import logo from '../../assets/logos/logo.png'
 
 // Define color constants (same as other components)
 const TEXT_COLOR = '#0F1115';

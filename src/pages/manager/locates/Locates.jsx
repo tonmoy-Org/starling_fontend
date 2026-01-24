@@ -12,7 +12,6 @@ import {
     Chip,
     Snackbar,
     Alert,
-    CircularProgress,
     Stack,
     Checkbox,
     Button,
@@ -57,6 +56,7 @@ import {
 import { Helmet } from 'react-helmet-async';
 import DashboardLoader from '../../../components/Loader/DashboardLoader';
 import OutlineButton from '../../../components/ui/OutlineButton';
+import RecycleBinModal from '../../../components/ui/Modal/RecycleBinModal';
 
 const TEXT_COLOR = '#0F1115';
 const BLUE_COLOR = '#1976d2';
@@ -241,6 +241,62 @@ const formatTargetWorkDate = (scheduledDateRaw) => {
         console.error('Error formatting target work date:', e);
         return 'ASAP';
     }
+};
+
+// Search input component
+const SearchInput = ({ value, onChange, placeholder, color, fullWidth = false }) => {
+    return (
+        <Box sx={{ position: 'relative', width: fullWidth ? '100%' : 250 }}>
+            <Box
+                component="input"
+                placeholder={placeholder}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                sx={{
+                    width: '100%',
+                    fontSize: '0.8rem',
+                    height: '36px',
+                    paddingLeft: '36px',
+                    paddingRight: value ? '36px' : '16px',
+                    border: `1px solid ${alpha(color, 0.2)}`,
+                    borderRadius: '4px',
+                    outline: 'none',
+                    '&:focus': {
+                        borderColor: color,
+                        boxShadow: `0 0 0 2px ${alpha(color, 0.1)}`,
+                    },
+                    '&::placeholder': {
+                        color: alpha(GRAY_COLOR, 0.6),
+                    },
+                }}
+            />
+            <Search
+                size={16}
+                color={GRAY_COLOR}
+                style={{
+                    position: 'absolute',
+                    left: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                }}
+            />
+            {value && (
+                <IconButton
+                    size="small"
+                    onClick={() => onChange('')}
+                    sx={{
+                        position: 'absolute',
+                        right: '4px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        padding: '4px',
+                    }}
+                >
+                    <X size={16} />
+                </IconButton>
+            )}
+        </Box>
+    );
 };
 
 const Locates = () => {
@@ -562,7 +618,7 @@ const Locates = () => {
             const promises = ids.map(id =>
                 axiosInstance.delete(`/locates/${id}/`)
             );
-            return Promise.all(promises); // 👈 RETURN THIS
+            return Promise.all(promises);
         },
         onSuccess: (responses) => {
             invalidateAndRefetch();
@@ -578,7 +634,6 @@ const Locates = () => {
             );
         },
     });
-
 
     const processed = useMemo(() => {
         return rawData
@@ -750,19 +805,6 @@ const Locates = () => {
         );
     }, [completed, searchCompleted]);
 
-    // Filter recycle bin items
-    const filteredRecycleBinItems = useMemo(() => {
-        if (!recycleBinSearch) return recycleBinItems;
-        const searchLower = recycleBinSearch.toLowerCase();
-        return recycleBinItems.filter(item =>
-            item.workOrderNumber?.toLowerCase().includes(searchLower) ||
-            item.customerName?.toLowerCase().includes(searchLower) ||
-            item.street?.toLowerCase().includes(searchLower) ||
-            item.city?.toLowerCase().includes(searchLower) ||
-            item.deletedBy?.toLowerCase().includes(searchLower)
-        );
-    }, [recycleBinItems, recycleBinSearch]);
-
     const handleChangePagePending = (event, newPage) => {
         setPagePending(newPage);
     };
@@ -852,7 +894,7 @@ const Locates = () => {
     };
 
     const toggleAllRecycleBinSelection = () => {
-        const currentPageItems = filteredRecycleBinItems.slice(
+        const currentPageItems = recycleBinItems.slice(
             recycleBinPage * recycleBinRowsPerPage,
             recycleBinPage * recycleBinRowsPerPage + recycleBinRowsPerPage
         );
@@ -954,70 +996,9 @@ const Locates = () => {
         pageCompleted * rowsPerPageCompleted + rowsPerPageCompleted
     );
 
-    const recycleBinPageItems = filteredRecycleBinItems.slice(
-        recycleBinPage * recycleBinRowsPerPage,
-        recycleBinPage * recycleBinRowsPerPage + recycleBinRowsPerPage
-    );
-
     const getCalledAtDate = (item) => {
         if (!item.calledAt) return '—';
         return formatDate(item.calledAt);
-    };
-
-    // Search input component
-    const SearchInput = ({ value, onChange, placeholder, color, fullWidth = false }) => {
-        return (
-            <Box sx={{ position: 'relative', width: fullWidth ? '100%' : 250 }}>
-                <Box
-                    component="input"
-                    placeholder={placeholder}
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    sx={{
-                        width: '100%',
-                        fontSize: '0.8rem',
-                        height: '36px',
-                        paddingLeft: '36px',
-                        paddingRight: value ? '36px' : '16px',
-                        border: `1px solid ${alpha(color, 0.2)}`,
-                        borderRadius: '4px',
-                        outline: 'none',
-                        '&:focus': {
-                            borderColor: color,
-                            boxShadow: `0 0 0 2px ${alpha(color, 0.1)}`,
-                        },
-                        '&::placeholder': {
-                            color: alpha(GRAY_COLOR, 0.6),
-                        },
-                    }}
-                />
-                <Search
-                    size={16}
-                    color={GRAY_COLOR}
-                    style={{
-                        position: 'absolute',
-                        left: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                    }}
-                />
-                {value && (
-                    <IconButton
-                        size="small"
-                        onClick={() => onChange('')}
-                        sx={{
-                            position: 'absolute',
-                            right: '4px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            padding: '4px',
-                        }}
-                    >
-                        <X size={16} />
-                    </IconButton>
-                )}
-            </Box>
-        );
     };
 
     return (
@@ -1418,403 +1399,32 @@ const Locates = () => {
                 />
             </Paper>
 
-            {/* Recycle Bin Modal */}
-            <Modal
+            {/* Recycle Bin Modal - Using separate component */}
+            <RecycleBinModal
                 open={recycleBinOpen}
                 onClose={() => setRecycleBinOpen(false)}
-                aria-labelledby="recycle-bin-modal"
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
-                <Box sx={{
-                    width: isMobile ? '100%' : '95%',
-                    maxWidth: 1400,
-                    maxHeight: '90vh',
-                    bgcolor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: 24,
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    m: isMobile ? 1 : 0,
-                }}>
-                    <Box sx={{
-                        p: 2,
-                        borderBottom: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
-                        bgcolor: alpha(PURPLE_COLOR, 0.03),
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                    }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box sx={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                backgroundColor: alpha(PURPLE_COLOR, 0.1),
-                                color: PURPLE_COLOR,
-                            }}>
-                                <History size={20} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{
-                                    fontSize: '1rem',
-                                    fontWeight: 600,
-                                    color: TEXT_COLOR,
-                                    mb: 0.5,
-                                }}>
-                                    Recycle Bin
-                                </Typography>
-                                <Typography variant="body2" sx={{
-                                    fontSize: '0.85rem',
-                                    color: GRAY_COLOR,
-                                }}>
-                                    {filteredRecycleBinItems.length} deleted item(s) • Restore or permanently delete
-                                </Typography>
-                            </Box>
-                        </Box>
-                        <IconButton
-                            size="small"
-                            onClick={() => setRecycleBinOpen(false)}
-                            sx={{
-                                color: GRAY_COLOR,
-                                '&:hover': {
-                                    backgroundColor: alpha(GRAY_COLOR, 0.1),
-                                },
-                            }}
-                        >
-                            <X size={20} />
-                        </IconButton>
-                    </Box>
-
-                    <Box sx={{
-                        p: 1.5,
-                        borderBottom: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: 2,
-                        flexDirection: isMobile ? 'column' : 'row',
-                    }}>
-                        <Box sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            width: isMobile ? '100%' : 'auto',
-                            flexWrap: isMobile ? 'wrap' : 'nowrap'
-                        }}>
-                            <Checkbox
-                                size="small"
-                                checked={recycleBinPageItems.length > 0 && recycleBinPageItems.every(item =>
-                                    selectedRecycleBinItems.has(item.id)
-                                )}
-                                indeterminate={
-                                    recycleBinPageItems.length > 0 &&
-                                    recycleBinPageItems.some(item =>
-                                        selectedRecycleBinItems.has(item.id)
-                                    ) &&
-                                    !recycleBinPageItems.every(item =>
-                                        selectedRecycleBinItems.has(item.id)
-                                    )
-                                }
-                                onChange={toggleAllRecycleBinSelection}
-                                sx={{
-                                    padding: '4px',
-                                    color: PURPLE_COLOR,
-                                    '&.Mui-checked': {
-                                        color: PURPLE_COLOR,
-                                    },
-                                }}
-                            />
-                            <SearchInput
-                                value={recycleBinSearch}
-                                onChange={setRecycleBinSearch}
-                                placeholder="Search deleted items..."
-                                color={PURPLE_COLOR}
-                                fullWidth={isMobile}
-                            />
-                        </Box>
-                        <Box sx={{
-                            display: 'flex',
-                            gap: 1,
-                            width: isMobile ? '100%' : 'auto',
-                            justifyContent: isMobile ? 'flex-start' : 'flex-start',
-                            mt: isMobile ? 1 : 0,
-                            flexWrap: isMobile ? 'wrap' : 'nowrap'
-                        }}>
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<RotateCcw size={14} />}
-                                onClick={confirmBulkRestore}
-                                disabled={selectedRecycleBinItems.size === 0 || bulkRestoreMutation.isPending}
-                                sx={{
-                                    textTransform: 'none',
-                                    fontSize: '0.75rem',
-                                    color: GREEN_COLOR,
-                                    borderColor: alpha(GREEN_COLOR, 0.3),
-                                    '&:hover': {
-                                        borderColor: GREEN_COLOR,
-                                        backgroundColor: alpha(GREEN_COLOR, 0.05),
-                                    },
-                                }}
-                            >
-                                {isSmallMobile ? 'Restore' : 'Restore'} ({selectedRecycleBinItems.size})
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<Trash2 size={14} />}
-                                onClick={confirmBulkPermanentDelete}
-                                disabled={selectedRecycleBinItems.size === 0 || bulkPermanentDeleteMutation.isPending}
-                                sx={{
-                                    textTransform: 'none',
-                                    fontSize: '0.75rem',
-                                    color: RED_COLOR,
-                                    borderColor: alpha(RED_COLOR, 0.3),
-                                    '&:hover': {
-                                        borderColor: RED_COLOR,
-                                        backgroundColor: alpha(RED_COLOR, 0.05),
-                                    },
-                                }}
-                            >
-                                {isSmallMobile ? 'Delete' : 'Delete'} ({selectedRecycleBinItems.size})
-                            </Button>
-                        </Box>
-                    </Box>
-
-                    <Box sx={{ flex: 1, overflow: 'auto' }}>
-                        {isRecycleBinLoading ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                                <CircularProgress size={24} sx={{ color: PURPLE_COLOR }} />
-                            </Box>
-                        ) : filteredRecycleBinItems.length === 0 ? (
-                            <Box sx={{ textAlign: 'center', py: 8 }}>
-                                <History size={48} color={alpha(GRAY_COLOR, 0.3)} />
-                                <Typography variant="body2" sx={{
-                                    mt: 2,
-                                    color: GRAY_COLOR,
-                                    fontSize: '0.9rem',
-                                }}>
-                                    No deleted items in recycle bin
-                                </Typography>
-                                <Typography variant="caption" sx={{
-                                    color: GRAY_COLOR,
-                                    fontSize: '0.8rem',
-                                }}>
-                                    Deleted items will appear here
-                                </Typography>
-                            </Box>
-                        ) : (
-                            <TableContainer sx={{
-                                overflowX: 'auto',
-                                '&::-webkit-scrollbar': {
-                                    height: '8px',
-                                },
-                                '&::-webkit-scrollbar-track': {
-                                    backgroundColor: alpha(PURPLE_COLOR, 0.05),
-                                },
-                                '&::-webkit-scrollbar-thumb': {
-                                    backgroundColor: alpha(PURPLE_COLOR, 0.2),
-                                    borderRadius: '4px',
-                                },
-                            }}>
-                                <Table size="small" sx={{ minWidth: isMobile ? 1000 : 'auto' }}>
-                                    <TableHead>
-                                        <TableRow sx={{
-                                            bgcolor: alpha(PURPLE_COLOR, 0.04),
-                                            '& th': {
-                                                borderBottom: `2px solid ${alpha(PURPLE_COLOR, 0.1)}`,
-                                                fontWeight: 600,
-                                                fontSize: isMobile ? '0.75rem' : '0.8rem',
-                                                color: TEXT_COLOR,
-                                                py: 1.5,
-                                                px: 1.5,
-                                                whiteSpace: 'nowrap',
-                                            }
-                                        }}>
-                                            <TableCell padding="checkbox" width={50} />
-                                            <TableCell sx={{ minWidth: 120 }}>Work Order</TableCell>
-                                            <TableCell sx={{ minWidth: 120 }}>Customer</TableCell>
-                                            <TableCell sx={{ minWidth: 180 }}>Address</TableCell>
-                                            <TableCell sx={{ minWidth: 120 }}>Deleted By</TableCell>
-                                            <TableCell sx={{ minWidth: 120 }}>Deleted At</TableCell>
-                                            <TableCell width={150} sx={{ minWidth: 120 }}>Actions</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {recycleBinPageItems.map((item) => {
-                                            const isSelected = selectedRecycleBinItems.has(item.id);
-                                            const workOrderNumber = item.workOrderNumber || 'N/A';
-                                            const customerName = item.customerName || 'Unknown';
-                                            const type = item.type || 'STANDARD';
-                                            const deletedBy = item.deletedBy || 'Unknown';
-                                            const deletedByEmail = item.deletedByEmail || '';
-
-                                            return (
-                                                <TableRow
-                                                    key={item.id}
-                                                    hover
-                                                    sx={{
-                                                        bgcolor: isSelected ? alpha(PURPLE_COLOR, 0.1) : 'white',
-                                                        '&:hover': {
-                                                            backgroundColor: alpha(PURPLE_COLOR, 0.05),
-                                                        },
-                                                    }}
-                                                >
-                                                    <TableCell padding="checkbox">
-                                                        <Checkbox
-                                                            size="small"
-                                                            checked={isSelected}
-                                                            onChange={() => toggleRecycleBinSelection(item.id)}
-                                                            sx={{
-                                                                padding: '4px',
-                                                                color: PURPLE_COLOR,
-                                                                '&.Mui-checked': {
-                                                                    color: PURPLE_COLOR,
-                                                                },
-                                                            }}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Typography variant="body2" sx={{
-                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
-                                                            fontWeight: 500,
-                                                            color: TEXT_COLOR,
-                                                        }}>
-                                                            {workOrderNumber}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{
-                                                            fontSize: '0.75rem',
-                                                            color: GRAY_COLOR,
-                                                        }}>
-                                                            {type}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Typography variant="body2" sx={{
-                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
-                                                            color: TEXT_COLOR,
-                                                        }}>
-                                                            {customerName}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Typography variant="body2" sx={{
-                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
-                                                            color: TEXT_COLOR,
-                                                            mb: 0.5,
-                                                        }}>
-                                                            {item.street || '—'}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{
-                                                            fontSize: '0.75rem',
-                                                            color: GRAY_COLOR,
-                                                        }}>
-                                                            {[item.city, item.state, item.zip].filter(Boolean).join(', ') || '—'}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Box>
-                                                            <Typography variant="body2" sx={{
-                                                                fontSize: isMobile ? '0.8rem' : '0.85rem',
-                                                                color: TEXT_COLOR,
-                                                            }}>
-                                                                {deletedBy}
-                                                            </Typography>
-                                                            {deletedByEmail && !isMobile && (
-                                                                <Typography variant="caption" sx={{
-                                                                    fontSize: '0.75rem',
-                                                                    color: GRAY_COLOR,
-                                                                }}>
-                                                                    {deletedByEmail}
-                                                                </Typography>
-                                                            )}
-                                                        </Box>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Typography variant="body2" sx={{
-                                                            fontSize: isMobile ? '0.8rem' : '0.85rem',
-                                                            color: TEXT_COLOR,
-                                                        }}>
-                                                            {formatDateShort(item.deletedAt)}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Stack direction="row" spacing={0.5}>
-                                                            <Tooltip title="Restore">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleSingleRestore(item)}
-                                                                    disabled={restoreFromRecycleBinMutation.isPending}
-                                                                    sx={{
-                                                                        color: GREEN_COLOR,
-                                                                        '&:hover': {
-                                                                            backgroundColor: alpha(GREEN_COLOR, 0.1),
-                                                                        },
-                                                                    }}
-                                                                >
-                                                                    <RotateCcw size={16} />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                            <Tooltip title="Delete Permanently">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleSinglePermanentDelete(item)}
-                                                                    disabled={permanentDeleteFromRecycleBinMutation.isPending}
-                                                                    sx={{
-                                                                        color: RED_COLOR,
-                                                                        '&:hover': {
-                                                                            backgroundColor: alpha(RED_COLOR, 0.1),
-                                                                        },
-                                                                    }}
-                                                                >
-                                                                    <Trash2 size={16} />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                        </Stack>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        )}
-                    </Box>
-
-                    {filteredRecycleBinItems.length > 0 && (
-                        <Box sx={{
-                            borderTop: `1px solid ${alpha(PURPLE_COLOR, 0.1)}`,
-                            p: 1,
-                        }}>
-                            <TablePagination
-                                rowsPerPageOptions={[5, 10, 25, 50]}
-                                component="div"
-                                count={filteredRecycleBinItems.length}
-                                rowsPerPage={recycleBinRowsPerPage}
-                                page={recycleBinPage}
-                                onPageChange={handleChangeRecycleBinPage}
-                                onRowsPerPageChange={handleChangeRecycleBinRowsPerPage}
-                                sx={{
-                                    '& .MuiTablePagination-toolbar': {
-                                        minHeight: '44px',
-                                    },
-                                    '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                                        fontSize: '0.8rem',
-                                    },
-                                }}
-                            />
-                        </Box>
-                    )}
-                </Box>
-            </Modal>
+                recycleBinItems={recycleBinItems}
+                isRecycleBinLoading={isRecycleBinLoading}
+                recycleBinSearch={recycleBinSearch}
+                setRecycleBinSearch={setRecycleBinSearch}
+                recycleBinPage={recycleBinPage}
+                recycleBinRowsPerPage={recycleBinRowsPerPage}
+                handleChangeRecycleBinPage={handleChangeRecycleBinPage}
+                handleChangeRecycleBinRowsPerPage={handleChangeRecycleBinRowsPerPage}
+                selectedRecycleBinItems={selectedRecycleBinItems}
+                toggleRecycleBinSelection={toggleRecycleBinSelection}
+                toggleAllRecycleBinSelection={toggleAllRecycleBinSelection}
+                confirmBulkRestore={confirmBulkRestore}
+                confirmBulkPermanentDelete={confirmBulkPermanentDelete}
+                handleSingleRestore={handleSingleRestore}
+                handleSinglePermanentDelete={handleSinglePermanentDelete}
+                restoreFromRecycleBinMutation={restoreFromRecycleBinMutation}
+                permanentDeleteFromRecycleBinMutation={permanentDeleteFromRecycleBinMutation}
+                bulkRestoreMutation={bulkRestoreMutation}
+                bulkPermanentDeleteMutation={bulkPermanentDeleteMutation}
+                isMobile={isMobile}
+                isSmallMobile={isSmallMobile}
+            />
 
             {/* Single Restore Dialog */}
             <Dialog

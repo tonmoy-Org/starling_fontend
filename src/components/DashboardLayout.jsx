@@ -22,8 +22,8 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import NotificationDrawer from './NotificationDrawer';
 import ProfileDialog from './ProfileDialog';
 import NestedMenuItem from './NestedMenuItem';
-import logo from '../public/favicon/logo.png';
-import miniLogo from '../public/favicon/favicon.ico';
+import logo from '../assets/logos/logo.png';
+import miniLogo from '../assets/logos/mini_logo.png';
 import DashboardFooter from './DashboardFooter';
 
 import {

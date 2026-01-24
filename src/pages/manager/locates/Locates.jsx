@@ -278,6 +278,7 @@ const Locates = () => {
                         await axiosInstance.patch(`/locates/${item.id}/`, {
                             timer_expired: true,
                             time_remaining: 'EXPIRED',
+                            completed_at: new Date().toISOString(),
                         });
                     } catch (error) {
                         console.error('Error auto-updating expired timer:', error);
@@ -443,35 +444,35 @@ const Locates = () => {
     });
     const bulkRestoreMutation = useMutation({
         mutationFn: async (ids) => {
-          const promises = ids.map(id =>
-            axiosInstance.patch(`/locates/${id}/`, {
-              is_deleted: false,
-              deleted_date: null,
-              deleted_by: '',
-              deleted_by_email: '',
-            })
-          );
-      
-          await Promise.all(promises);
-          return ids; // 👈 return something
+            const promises = ids.map(id =>
+                axiosInstance.patch(`/locates/${id}/`, {
+                    is_deleted: false,
+                    deleted_date: null,
+                    deleted_by: '',
+                    deleted_by_email: '',
+                })
+            );
+
+            await Promise.all(promises);
+            return ids; // 👈 return something
         },
-      
+
         onSuccess: (response) => {
-          invalidateAndRefetch();
-          setSelectedRecycleBinItems(new Set());
-          setRestoreDialogOpen(false);
-      
-          showSnackbar(`${response.length} item(s) restored`, 'success');
+            invalidateAndRefetch();
+            setSelectedRecycleBinItems(new Set());
+            setRestoreDialogOpen(false);
+
+            showSnackbar(`${response.length} item(s) restored`, 'success');
         },
-      
+
         onError: (err) => {
-          console.error('Bulk restore error:', err);
-          showSnackbar(
-            err?.response?.data?.message || 'Bulk restore failed',
-            'error'
-          );
+            console.error('Bulk restore error:', err);
+            showSnackbar(
+                err?.response?.data?.message || 'Bulk restore failed',
+                'error'
+            );
         },
-      });      
+    });
 
     const permanentDeleteFromRecycleBinMutation = useMutation({
         mutationFn: async (id) => {

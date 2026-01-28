@@ -27,6 +27,7 @@ import {
     InputLabel,
     useMediaQuery,
     useTheme,
+    CircularProgress,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
@@ -59,9 +60,6 @@ import DashboardLoader from '../../../components/Loader/DashboardLoader';
 import StyledTextField from '../../../components/ui/StyledTextField';
 import OutlineButton from '../../../components/ui/OutlineButton';
 import RmeRecycleBinModal from '../../../components/ui/Modal/RmeRecycleBinModal';
-
-// Import the RME JSON data
-import rmeFormData from '../../../../rme.json';
 import StyledSelect from '../../../components/ui/StyledSelect';
 import GradientButton from '../../../components/ui/GradientButton';
 
@@ -187,6 +185,7 @@ const getCurrentPacificTimeISO = () => {
     return new Date(pacificTime.getTime() - (offset * 60 * 60 * 1000)).toISOString();
 };
 
+// PDF Viewer Modal Component
 const PDFViewerModal = ({ open, onClose, pdfUrl }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -301,28 +300,85 @@ const PDFViewerModal = ({ open, onClose, pdfUrl }) => {
 };
 
 // Edit Form Modal Component
-const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
+const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-    // State for form data
+    const [isLoading, setIsLoading] = useState(false);
+    const [saveLoading, setSaveLoading] = useState(false);
     const [formData, setFormData] = useState({});
+    const [formStructure, setFormStructure] = useState([]);
+    const [error, setError] = useState(null);
 
-    // Initialize form data when modal opens or workOrderData changes
+    // Fetch form structure from server when modal opens
     useEffect(() => {
-        if (workOrderData) {
-            // Initialize form with default values from JSON structure
-            const initialData = {};
-            rmeFormData.forEach(field => {
-                if (field.type === 'select') {
-                    initialData[field.name] = field.selected || '';
-                } else if (field.type === 'text') {
-                    initialData[field.name] = field.value || '';
-                } else if (field.type === 'textarea') {
-                    initialData[field.name] = field.value || '';
+        const fetchFormData = async () => {
+            if (!workOrderData?.id) return;
+            
+            setIsLoading(true);
+            setError(null);
+            try {
+                const response = await axiosInstance.get(`/work-order-edit/${workOrderData.id}/`);
+                
+                let serverData = response.data;
+                
+                if (serverData.data) {
+                    serverData = serverData.data;
                 }
-            });
-            setFormData(initialData);
+                
+                let fields = [];
+                
+                if (serverData.form_data && Array.isArray(serverData.form_data)) {
+                    fields = serverData.form_data;
+                } else if (Array.isArray(serverData)) {
+                    fields = serverData;
+                } else if (serverData.fields && Array.isArray(serverData.fields)) {
+                    fields = serverData.fields;
+                }
+                
+                const validatedFields = fields.map(field => {
+                    const validatedField = {
+                        name: field.name || field.fieldName || 'Unnamed Field',
+                        label: field.label || field.name || field.fieldName || 'Unnamed Field',
+                        type: field.type || 'text',
+                        value: field.value || field.selected || field.defaultValue || '',
+                        options: field.options || [],
+                        required: field.required || false,
+                        placeholder: field.placeholder || '',
+                        validation: field.validation || null,
+                        order: field.order || 0
+                    };
+                    
+                    if (validatedField.type === 'select' && !Array.isArray(validatedField.options)) {
+                        validatedField.options = [];
+                    }
+                    
+                    return validatedField;
+                });
+                
+                validatedFields.sort((a, b) => (a.order || 0) - (b.order || 0));
+                
+                setFormStructure(validatedFields);
+                
+                const initialData = {};
+                validatedFields.forEach(field => {
+                    if (field.type === 'select' || field.type === 'text' || field.type === 'textarea') {
+                        initialData[field.name] = field.value || '';
+                    }
+                });
+                
+                setFormData(initialData);
+                
+            } catch (error) {
+                console.error('Error fetching form data:', error);
+                setError(error.response?.data?.message || 'Failed to load form data');
+                setFormStructure([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (open && workOrderData?.id) {
+            fetchFormData();
         }
     }, [workOrderData, open]);
 
@@ -333,56 +389,94 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
         }));
     };
 
-    const handleSubmit = () => {
-        // Here you would typically save the form data
-        console.log('Form data to save:', formData);
-        if (onSave) {
-            onSave(formData);
+    const handleSubmit = async () => {
+        if (!workOrderData?.id) return;
+        
+        setSaveLoading(true);
+        setError(null);
+        
+        try {
+            const payload = {
+                form_data: formData,
+                updated_by: workOrderData.currentUser?.name || 'System',
+                updated_at: new Date().toISOString(),
+            };
+            console.log(payload);
+            // const response = await axiosInstance.patch(`/work-order-edit/${workOrderData.id}/`, payload);
+            
+            // if (onSave) {
+            //     onSave(formData, response.data);
+            // }
+            
+            // if (showSnackbar) {
+            //     showSnackbar('Form saved successfully', 'success');
+            // }
+            
+            // setError(null);
+        } catch (error) {
+            console.error('Error saving form:', error);
+            setError(error.response?.data?.message || 'Failed to save form');
+            if (showSnackbar) {
+                showSnackbar('Failed to save form', 'error');
+            }
+        } finally {
+            setSaveLoading(false);
         }
-        // onClose();
     };
 
     const renderFormField = (field, index) => {
-        // Create a unique key by combining field.name with index
         const uniqueKey = `${field.name}-${index}`;
+        const value = formData[field.name] || '';
 
         switch (field.type) {
             case 'select':
                 return (
                     <TableRow key={uniqueKey}>
                         <TableCell sx={{
-                            py: 1.5,
-                            borderBottom: index === rmeFormData.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '60%',
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            width: isMobile ? '40%' : '30%',
                             fontWeight: 600,
-                            fontSize: '0.9rem',
+                            fontSize: '0.85rem',
                             color: TEXT_COLOR,
                             bgcolor: alpha(BLUE_COLOR, 0.02),
+                            verticalAlign: 'top',
                         }}>
-                            {field.name}
+                            {field.label}
+                            {field.required && (
+                                <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                    *
+                                </Typography>
+                            )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 1.5,
-                            borderBottom: index === rmeFormData.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <FormControl fullWidth size="small">
                                 <StyledSelect
-                                    value={formData[field.name] || ''}
+                                    value={value}
                                     onChange={(e) => handleInputChange(field.name, e.target.value)}
                                     displayEmpty
+                                    disabled={isLoading || saveLoading}
+                                    error={field.required && !value}
                                     sx={{
                                         '& .MuiSelect-select': {
-                                            fontSize: '0.9rem',
+                                            fontSize: '0.85rem',
                                             padding: '8px 12px',
                                             borderColor: "#1976d2",
                                         }
                                     }}
                                 >
                                     <MenuItem value="">
-                                        <em>Select {field.name}</em>
+                                        <em>Select {field.label}</em>
                                     </MenuItem>
-                                    {field.options.map((option) => (
-                                        <MenuItem key={option} value={option}>
+                                    {field.options && field.options.map((option, optionIndex) => (
+                                        <MenuItem 
+                                            key={`${option}-${optionIndex}`} 
+                                            value={option}
+                                            sx={{ fontSize: '0.85rem' }}
+                                        >
                                             {option}
                                         </MenuItem>
                                     ))}
@@ -396,28 +490,37 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                 return (
                     <TableRow key={uniqueKey}>
                         <TableCell sx={{
-                            py: 1.5,
-                            borderBottom: index === rmeFormData.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '60%',
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            width: isMobile ? '40%' : '30%',
                             fontWeight: 600,
-                            fontSize: '0.9rem',
+                            fontSize: '0.85rem',
                             color: TEXT_COLOR,
                             bgcolor: alpha(BLUE_COLOR, 0.02),
+                            verticalAlign: 'top',
                         }}>
-                            {field.name}
+                            {field.label}
+                            {field.required && (
+                                <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                    *
+                                </Typography>
+                            )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 1.5,
-                            borderBottom: index === rmeFormData.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <StyledTextField
-                                value={formData[field.name] || ''}
+                                value={value}
                                 onChange={(e) => handleInputChange(field.name, e.target.value)}
                                 fullWidth
                                 size="small"
+                                disabled={isLoading || saveLoading}
+                                placeholder={field.placeholder}
+                                error={field.required && !value}
                                 sx={{
                                     '& .MuiInputBase-input': {
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.85rem',
                                         padding: '8px 12px',
                                     }
                                 }}
@@ -430,31 +533,39 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                 return (
                     <TableRow key={uniqueKey}>
                         <TableCell sx={{
-                            py: 1.5,
-                            borderBottom: index === rmeFormData.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '60%',
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            width: isMobile ? '40%' : '30%',
                             fontWeight: 600,
-                            fontSize: '0.9rem',
+                            fontSize: '0.85rem',
                             color: TEXT_COLOR,
                             bgcolor: alpha(BLUE_COLOR, 0.02),
                             verticalAlign: 'top',
                         }}>
-                            {field.name}
+                            {field.label}
+                            {field.required && (
+                                <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                    *
+                                </Typography>
+                            )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 1.5,
-                            borderBottom: index === rmeFormData.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <StyledTextField
-                                value={formData[field.name] || ''}
+                                value={value}
                                 onChange={(e) => handleInputChange(field.name, e.target.value)}
                                 fullWidth
                                 multiline
-                                rows={3}
+                                rows={field.rows || 3}
                                 size="small"
+                                disabled={isLoading || saveLoading}
+                                placeholder={field.placeholder}
+                                error={field.required && !value}
                                 sx={{
                                     '& .MuiInputBase-input': {
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.85rem',
                                         lineHeight: 1.5,
                                     }
                                 }}
@@ -464,7 +575,35 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                 );
 
             default:
-                return null;
+                return (
+                    <TableRow key={uniqueKey}>
+                        <TableCell sx={{
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            width: isMobile ? '40%' : '30%',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            color: TEXT_COLOR,
+                            bgcolor: alpha(BLUE_COLOR, 0.02),
+                            verticalAlign: 'top',
+                        }}>
+                            {field.label}
+                            {field.required && (
+                                <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                    *
+                                </Typography>
+                            )}
+                        </TableCell>
+                        <TableCell sx={{
+                            py: 2,
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                        }}>
+                            <Typography variant="body2" sx={{ color: GRAY_COLOR, fontStyle: 'italic' }}>
+                                Unsupported field type: {field.type}
+                            </Typography>
+                        </TableCell>
+                    </TableRow>
+                );
         }
     };
 
@@ -472,7 +611,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
         <Dialog
             open={open}
             onClose={onClose}
-            maxWidth="xl"
+            maxWidth="lg"
             fullWidth
             fullScreen={isMobile}
             PaperProps={{
@@ -506,14 +645,11 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                         backgroundColor: alpha(BLUE_COLOR, 0.1),
                         color: BLUE_COLOR,
                     }}>
-                        <img
-                            src={pen}
-                            alt="edit"
-                            style={{
-                                width: '20px',
-                                height: '20px',
-                            }}
-                        />
+                        {saveLoading ? (
+                            <CircularProgress size={20} />
+                        ) : (
+                            <Save size={20} />
+                        )}
                     </Box>
                     <Box>
                         <Typography variant="h6" sx={{
@@ -535,6 +671,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                 <IconButton
                     size="small"
                     onClick={onClose}
+                    disabled={saveLoading}
                     sx={{
                         color: GRAY_COLOR,
                         '&:hover': {
@@ -547,81 +684,128 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
             </DialogTitle>
 
             <DialogContent sx={{ p: 3, overflowY: 'auto' }}>
-                <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600, mb: 1, color: TEXT_COLOR }}>
-                        Work Order Details
-                    </Typography>
-                    <Box sx={{
-                        display: 'flex',
-                        gap: 2,
-                        flexWrap: 'wrap',
-                        p: 2,
-                        borderRadius: '6px',
-                        backgroundColor: alpha(GRAY_COLOR, 0.03),
-                        border: `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                        mb: 3,
-                    }}>
-                        <Box>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
-                                Work Order #
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
-                                {workOrderData?.woNumber || 'N/A'}
-                            </Typography>
-                        </Box>
-                        <Box>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
-                                Address
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
-                                {workOrderData?.street || 'N/A'}
-                            </Typography>
-                        </Box>
-                        <Box>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
-                                Technician
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
-                                {workOrderData?.technician || 'N/A'}
-                            </Typography>
-                        </Box>
-                        <Box>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
-                                Date
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
-                                {workOrderData?.date || 'N/A'}
-                            </Typography>
-                        </Box>
+                {isLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+                        <DashboardLoader />
                     </Box>
-                </Box>
+                ) : (
+                    <>
+                        <Box sx={{ mb: 3 }}>
+                            <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600, mb: 1, color: TEXT_COLOR }}>
+                                Work Order Details
+                            </Typography>
+                            <Box sx={{
+                                display: 'flex',
+                                gap: 2,
+                                flexWrap: 'wrap',
+                                p: 2,
+                                borderRadius: '6px',
+                                backgroundColor: alpha(GRAY_COLOR, 0.03),
+                                border: `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                                mb: 3,
+                            }}>
+                                <Box>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
+                                        Work Order #
+                                    </Typography>
+                                    <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
+                                        {workOrderData?.woNumber || 'N/A'}
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
+                                        Address
+                                    </Typography>
+                                    <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
+                                        {workOrderData?.street || 'N/A'}
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
+                                        Technician
+                                    </Typography>
+                                    <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
+                                        {workOrderData?.technician || 'N/A'}
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: GRAY_COLOR, mb: 0.5 }}>
+                                        Date
+                                    </Typography>
+                                    <Typography variant="body1" sx={{ fontSize: '0.9rem', fontWeight: 600, color: TEXT_COLOR }}>
+                                        {workOrderData?.date || 'N/A'}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        </Box>
 
-                <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600, mb: 2, color: TEXT_COLOR }}>
-                    RME Form Fields
-                </Typography>
+                        {error && (
+                            <Alert 
+                                severity="error" 
+                                sx={{ mb: 2 }}
+                                onClose={() => setError(null)}
+                            >
+                                {error}
+                            </Alert>
+                        )}
 
-                <TableContainer sx={{
-                    borderRadius: '6px',
-                    border: `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                    maxHeight: '400px',
-                    overflowY: 'auto',
-                    '&::-webkit-scrollbar': {
-                        width: '8px',
-                    },
-                    '&::-webkit-scrollbar-track': {
-                        backgroundColor: alpha(GRAY_COLOR, 0.05),
-                    },
-                    '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: alpha(BLUE_COLOR, 0.2),
-                        borderRadius: '4px',
-                    },
-                }}>
-                    <Table size="small" sx={{ minWidth: 600 }}>
-                        <TableBody>
-                            {rmeFormData.map((field, index) => renderFormField(field, index))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                        <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600, mb: 2, color: TEXT_COLOR }}>
+                            RME Form Fields
+                        </Typography>
+
+                        {formStructure.length === 0 ? (
+                            <Box sx={{ textAlign: 'center', py: 4 }}>
+                                <Typography variant="body2" sx={{ color: GRAY_COLOR }}>
+                                    No form fields available for this work order
+                                </Typography>
+                            </Box>
+                        ) : (
+                            <TableContainer component={Paper} sx={{
+                                borderRadius: '6px',
+                                border: `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                                maxHeight: '400px',
+                                overflowY: 'auto',
+                                '&::-webkit-scrollbar': {
+                                    width: '8px',
+                                },
+                                '&::-webkit-scrollbar-track': {
+                                    backgroundColor: alpha(GRAY_COLOR, 0.05),
+                                },
+                                '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: alpha(BLUE_COLOR, 0.2),
+                                    borderRadius: '4px',
+                                },
+                            }}>
+                                <Table size="small" sx={{ minWidth: 600 }}>
+                                    <TableHead>
+                                        <TableRow sx={{ bgcolor: alpha(BLUE_COLOR, 0.05) }}>
+                                            <TableCell sx={{
+                                                py: 1.5,
+                                                fontWeight: 600,
+                                                fontSize: '0.9rem',
+                                                color: TEXT_COLOR,
+                                                width: isMobile ? '40%' : '30%',
+                                            }}>
+                                                Field Name
+                                            </TableCell>
+                                            <TableCell sx={{
+                                                py: 1.5,
+                                                fontWeight: 600,
+                                                fontSize: '0.9rem',
+                                                color: TEXT_COLOR,
+                                            }}>
+                                                Value
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {formStructure.map((field, index) => renderFormField(field, index))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        )}
+                    </>
+                )}
             </DialogContent>
 
             <DialogActions sx={{
@@ -638,6 +822,8 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                     variant="outlined"
                     color="error"
                     size="small"
+                    disabled={saveLoading}
+                    sx={{ minWidth: 100 }}
                 >
                     Cancel
                 </OutlineButton>
@@ -645,2032 +831,14 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave }) => {
                     onClick={handleSubmit}
                     variant="contained"
                     color="primary"
-                    startIcon={<Save size={18} />}
+                    startIcon={saveLoading ? <CircularProgress size={16} color="inherit" /> : <Save size={18} />}
+                    disabled={isLoading || saveLoading || formStructure.length === 0}
+                    sx={{ minWidth: 150 }}
                 >
-                    Save Changes
+                    {saveLoading ? 'Saving...' : 'Save Changes'}
                 </GradientButton>
             </DialogActions>
         </Dialog>
-    );
-};
-
-const RMEReports = () => {
-    const queryClient = useQueryClient();
-    const { user: authUser } = useAuth();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-    // State for each table's selection
-    const [selectedReportNeeded, setSelectedReportNeeded] = useState(new Set());
-    const [selectedReportSubmitted, setSelectedReportSubmitted] = useState(new Set());
-    const [selectedHolding, setSelectedHolding] = useState(new Set());
-    const [selectedFinalized, setSelectedFinalized] = useState(new Set());
-
-    // State for actions checkboxes in report submitted table
-    const [waitToLockAction, setWaitToLockAction] = useState(new Set());
-
-    // State for action details (for wait to lock)
-    const [waitToLockDetails, setWaitToLockDetails] = useState({});
-
-    // Pagination for each table
-    const [pageReportNeeded, setPageReportNeeded] = useState(0);
-    const [rowsPerPageReportNeeded, setRowsPerPageReportNeeded] = useState(isMobile ? 5 : 10);
-    const [pageReportSubmitted, setPageReportSubmitted] = useState(0);
-    const [rowsPerPageReportSubmitted, setRowsPerPageReportSubmitted] = useState(isMobile ? 5 : 10);
-    const [pageHolding, setPageHolding] = useState(0);
-    const [rowsPerPageHolding, setRowsPerPageHolding] = useState(isMobile ? 5 : 10);
-    const [pageFinalized, setPageFinalized] = useState(0);
-    const [rowsPerPageFinalized, setRowsPerPageFinalized] = useState(isMobile ? 5 : 10);
-
-    // Search states
-    const [searchReportNeeded, setSearchReportNeeded] = useState('');
-    const [searchReportSubmitted, setSearchReportSubmitted] = useState('');
-    const [searchHolding, setSearchHolding] = useState('');
-    const [searchFinalized, setSearchFinalized] = useState('');
-
-    // Recycle Bin modal states
-    const [recycleBinModalOpen, setRecycleBinModalOpen] = useState(false);
-    const [recycleBinSearch, setRecycleBinSearch] = useState('');
-    const [recycleBinPage, setRecycleBinPage] = useState(0);
-    const [recycleBinRowsPerPage, setRecycleBinRowsPerPage] = useState(isMobile ? 5 : 10);
-    const [selectedRecycleBinItems, setSelectedRecycleBinItems] = useState(new Set());
-
-    // Dialog states
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
-    const [deletionSection, setDeletionSection] = useState('');
-
-    const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
-    const [selectedForPermanentDeletion, setSelectedForPermanentDeletion] = useState(new Set());
-
-    const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-    const [selectedForRestore, setSelectedForRestore] = useState(new Set());
-
-    // PDF Viewer state
-    const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
-    const [currentPdfUrl, setCurrentPdfUrl] = useState('');
-
-    // Edit Form Modal state
-    const [editFormModalOpen, setEditFormModalOpen] = useState(false);
-    const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
-
-    // Confirmation modals for actions - FIXED: Initialize with open: false
-    const [lockedConfirmModal, setLockedConfirmModal] = useState({
-        open: false,
-        itemId: null,
-        itemData: null,
-        section: null,
-    });
-
-    const [discardConfirmModal, setDiscardConfirmModal] = useState({
-        open: false,
-        itemId: null,
-        itemData: null,
-        section: null,
-    });
-
-    // Single action modals for recycle bin
-    const [singleRestoreDialogOpen, setSingleRestoreDialogOpen] = useState(false);
-    const [singleDeleteDialogOpen, setSingleDeleteDialogOpen] = useState(false);
-    const [selectedSingleItem, setSelectedSingleItem] = useState(null);
-
-    // Snackbar
-    const [snackbar, setSnackbar] = useState({
-        open: false,
-        message: '',
-        severity: 'success',
-    });
-
-    // Fetch all work orders
-    const { data: workOrders = [], isLoading } = useQuery({
-        queryKey: ['rme-work-orders'],
-        queryFn: async () => {
-            const res = await axiosInstance.get('/work-orders-today/');
-            return Array.isArray(res.data) ? res.data : [];
-        },
-        staleTime: 30000,
-        refetchInterval: 60000,
-    });
-
-    // Fetch only deleted work orders for recycle bin
-    const { data: deletedWorkOrders = [] } = useQuery({
-        queryKey: ['rme-deleted-work-orders'],
-        queryFn: async () => {
-            const res = await axiosInstance.get('/work-orders-today/');
-            const allOrders = Array.isArray(res.data) ? res.data : [];
-            return allOrders.filter(order => order.is_deleted);
-        },
-        staleTime: 30000,
-        refetchInterval: 60000,
-    });
-
-    // Initialize checkbox states from API data
-    useEffect(() => {
-        if (workOrders.length > 0) {
-            const newWaitToLockDetails = {};
-
-            workOrders.forEach(item => {
-                if (!item.is_deleted && !item.finalized_by && !item.wait_to_lock && !item.moved_to_holding_date) {
-                    if (item.wait_to_lock) {
-                        newWaitToLockDetails[item.id.toString()] = {
-                            reason: item.reason || '',
-                            notes: item.notes || ''
-                        };
-                    }
-                }
-            });
-
-            setWaitToLockDetails(newWaitToLockDetails);
-        }
-    }, [workOrders]);
-
-    // Get current user from auth
-    const currentUser = useMemo(() => {
-        return authUser ? {
-            name: authUser.name || authUser.full_name || authUser.username || 'Unknown User',
-            email: authUser.email || authUser.email_address || 'unknown@example.com',
-            id: authUser.id || authUser.user_id || 'unknown'
-        } : {
-            name: 'Unknown User',
-            email: 'unknown@example.com',
-            id: 'unknown'
-        };
-    }, [authUser]);
-
-    // Process data for different stages with Pacific Time formatting
-    const processedData = useMemo(() => {
-        const reportNeeded = [];
-        const reportSubmitted = [];
-        const holding = [];
-        const finalized = [];
-
-        workOrders.forEach(item => {
-            const report = {
-                id: item.id.toString(),
-                woNumber: item.wo_number || 'N/A',
-                date: formatDate(item.scheduled_date),
-                scheduledDate: item.scheduled_date,
-                elapsedTime: calculateElapsedTime(item.scheduled_date),
-                elapsedColor: getElapsedColor(item.scheduled_date),
-                technician: item.technician || 'Unassigned',
-                technicianInitial: getTechnicianInitial(item.technician),
-                address: item.full_address || 'No address',
-                street: item.full_address ? item.full_address.split(',')[0]?.trim() || 'Unknown' : 'Unknown',
-                city: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[0] || 'Unknown' : 'Unknown',
-                state: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[1] || 'Unknown' : 'Unknown',
-                zip: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[2] || 'Unknown' : 'Unknown',
-                lastReport: !!item.last_report_link,
-                lastReportLink: item.last_report_link,
-                unlockedReport: !!item.unlocked_report_link,
-                unlockedReportLink: item.unlocked_report_link,
-                techReportSubmitted: item.tech_report_submitted || false,
-                waitToLock: item.wait_to_lock || false,
-                reason: item.reason || '',
-                notes: item.notes || '',
-                movedToHoldingDate: item.moved_to_holding_date,
-                isDeleted: item.is_deleted || false,
-                deletedBy: item.deleted_by,
-                deletedDate: item.deleted_date,
-                deletedDateFormatted: formatDateTimeWithTZ(item.deleted_date),
-                finalizedBy: item.finalized_by,
-                finalizedByEmail: item.finalized_by_email,
-                finalizedDate: item.finalized_date,
-                finalizedDateFormatted: formatDateTimeWithTZ(item.finalized_date),
-                reportId: item.report_id,
-                createdAt: item.scheduled_date,
-                timeCompleted: formatTime(item.scheduled_date),
-                scheduledDateFormatted: formatDateTimeWithTZ(item.scheduled_date),
-                movedToHoldingDateFormatted: formatDateTimeWithTZ(item.moved_to_holding_date),
-                rawData: item,
-            };
-
-            if (item.is_deleted) {
-                // Deleted items go to recycle bin
-            } else if (item.status === 'DELETED' && item.rme_completed) {
-                finalized.push({
-                    ...report,
-                    action: 'deleted',
-                    actionTime: item.finalized_date || item.updated_at || item.created_at,
-                    actionTimeFormatted: formatDateTimeWithTZ(item.finalized_date || item.updated_at || item.created_at),
-                    by: item.finalized_by || 'System',
-                    byEmail: item.finalized_by_email || '',
-                    status: 'DELETED',
-                    statusColor: RED_COLOR,
-                    isStatusDeleted: true,
-                });
-            } else if (item.finalized_by && item.rme_completed) {
-                finalized.push({
-                    ...report,
-                    action: 'locked',
-                    actionTime: item.finalized_date,
-                    actionTimeFormatted: formatDateTimeWithTZ(item.finalized_date),
-                    by: item.finalized_by,
-                    byEmail: item.finalized_by_email || '',
-                    status: 'LOCKED',
-                    statusColor: GREEN_COLOR,
-                });
-            } else if (item.wait_to_lock || item.moved_to_holding_date) {
-                holding.push({
-                    ...report,
-                    priorLockedReport: !!item.last_report_link,
-                    reason: item.reason || 'Pending Review',
-                });
-            } else if (item.tech_report_submitted) {
-                reportSubmitted.push(report);
-            } else {
-                reportNeeded.push(report);
-            }
-        });
-
-        return { reportNeeded, reportSubmitted, holding, finalized };
-    }, [workOrders]);
-
-    // Filter functions for each table with search
-    const filteredReportNeeded = useMemo(() => {
-        let filtered = processedData.reportNeeded;
-        if (searchReportNeeded) {
-            const searchLower = searchReportNeeded.toLowerCase();
-            filtered = filtered.filter(report =>
-                report.technician?.toLowerCase().includes(searchLower) ||
-                report.address?.toLowerCase().includes(searchLower) ||
-                report.street?.toLowerCase().includes(searchLower) ||
-                report.city?.toLowerCase().includes(searchLower) ||
-                report.woNumber?.toLowerCase().includes(searchLower)
-            );
-        }
-        return filtered;
-    }, [processedData.reportNeeded, searchReportNeeded]);
-
-    const filteredReportSubmitted = useMemo(() => {
-        let filtered = processedData.reportSubmitted;
-        if (searchReportSubmitted) {
-            const searchLower = searchReportSubmitted.toLowerCase();
-            filtered = filtered.filter(report =>
-                report.technician?.toLowerCase().includes(searchLower) ||
-                report.address?.toLowerCase().includes(searchLower) ||
-                report.street?.toLowerCase().includes(searchLower) ||
-                report.city?.toLowerCase().includes(searchLower) ||
-                report.woNumber?.toLowerCase().includes(searchLower)
-            );
-        }
-        return filtered;
-    }, [processedData.reportSubmitted, searchReportSubmitted]);
-
-    const filteredHoldingReports = useMemo(() => {
-        let filtered = processedData.holding;
-        if (searchHolding) {
-            const searchLower = searchHolding.toLowerCase();
-            filtered = filtered.filter(report =>
-                report.technician?.toLowerCase().includes(searchLower) ||
-                report.address?.toLowerCase().includes(searchLower) ||
-                report.reason?.toLowerCase().includes(searchLower) ||
-                report.notes?.toLowerCase().includes(searchLower)
-            );
-        }
-        return filtered;
-    }, [processedData.holding, searchHolding]);
-
-    const filteredFinalizedReports = useMemo(() => {
-        let filtered = processedData.finalized;
-        if (searchFinalized) {
-            const searchLower = searchFinalized.toLowerCase();
-            filtered = filtered.filter(report =>
-                report.by?.toLowerCase().includes(searchLower) ||
-                report.address?.toLowerCase().includes(searchLower) ||
-                report.technician?.toLowerCase().includes(searchLower) ||
-                report.status?.toLowerCase().includes(searchLower) ||
-                report.reportId?.toLowerCase().includes(searchLower)
-            );
-        }
-        return filtered;
-    }, [processedData.finalized, searchFinalized]);
-
-    // Handle PDF view
-    const handleViewPDF = (pdfUrl) => {
-        setCurrentPdfUrl(pdfUrl);
-        setPdfViewerOpen(true);
-    };
-
-    // Handle Edit button click - opens the edit form modal
-    const handleEditClick = (item) => {
-        setSelectedWorkOrder(item);
-        setEditFormModalOpen(true);
-    };
-
-    // Handle save from edit form
-    const handleSaveForm = (formData) => {
-        showSnackbar('Form saved successfully', 'success');
-        queryClient.invalidateQueries(['rme-work-orders']);
-    };
-
-    // Mutations
-    const invalidateAndRefetch = () => {
-        queryClient.invalidateQueries(['rme-work-orders']);
-        queryClient.invalidateQueries(['rme-deleted-work-orders']);
-    };
-
-    const bulkSoftDeleteMutation = useMutation({
-        mutationFn: async (ids) => {
-            const promises = Array.from(ids).map(id =>
-                axiosInstance.patch(`/work-orders-today/${id}/`, {
-                    is_deleted: true,
-                    deleted_by: currentUser.name,
-                    deleted_by_email: currentUser.email,
-                    deleted_date: getCurrentPacificTimeISO(),
-                })
-            );
-            await Promise.all(promises);
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-            showSnackbar('Items moved to recycle bin', 'success');
-        },
-        onError: (err) => {
-            showSnackbar(err?.response?.data?.message || 'Delete failed', 'error');
-        },
-    });
-
-    const permanentDeleteFromRecycleBinMutation = useMutation({
-        mutationFn: async (id) => {
-            const response = await axiosInstance.delete(`/work-orders-today/${id}/`);
-            return response.data;
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-            setSelectedRecycleBinItems(new Set());
-            setSingleDeleteDialogOpen(false);
-            setSelectedSingleItem(null);
-            showSnackbar('Item permanently deleted', 'success');
-        },
-        onError: (err) => {
-            console.error('Permanent delete error:', err);
-            showSnackbar(err?.response?.data?.message || 'Permanent delete failed', 'error');
-        },
-    });
-
-    const bulkPermanentDeleteMutation = useMutation({
-        mutationFn: async (ids) => {
-            const promises = ids.map(id =>
-                axiosInstance.delete(`/work-orders-today/${id}/`)
-            );
-            await Promise.all(promises);
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-            setSelectedRecycleBinItems(new Set());
-            setPermanentDeleteDialogOpen(false);
-            showSnackbar('Items permanently deleted', 'success');
-        },
-        onError: (err) => {
-            console.error('Bulk permanent delete error:', err);
-            showSnackbar(err?.response?.data?.message || 'Bulk permanent delete failed', 'error');
-        },
-    });
-
-    const restoreFromRecycleBinMutation = useMutation({
-        mutationFn: async (id) => {
-            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
-                is_deleted: false,
-                deleted_date: null,
-                deleted_by: '',
-                deleted_by_email: '',
-            });
-            return response.data;
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-            setSelectedRecycleBinItems(new Set());
-            setSingleRestoreDialogOpen(false);
-            setSelectedSingleItem(null);
-            showSnackbar('Item restored successfully', 'success');
-        },
-        onError: (err) => {
-            console.error('Restore error:', err);
-            showSnackbar(err?.response?.data?.message || 'Restore failed', 'error');
-        },
-    });
-
-    const bulkRestoreMutation = useMutation({
-        mutationFn: async (ids) => {
-            const promises = ids.map(id =>
-                axiosInstance.patch(`/work-orders-today/${id}/`, {
-                    is_deleted: false,
-                    deleted_date: null,
-                    deleted_by: '',
-                    deleted_by_email: '',
-                })
-            );
-            return Promise.all(promises);
-        },
-        onSuccess: (responses) => {
-            invalidateAndRefetch();
-            setSelectedRecycleBinItems(new Set());
-            setRestoreDialogOpen(false);
-            showSnackbar(`${responses.length} item(s) restored`, 'success');
-        },
-        onError: (err) => {
-            console.error('Bulk restore error:', err);
-            showSnackbar(
-                err?.response?.data?.message || 'Bulk restore failed',
-                'error'
-            );
-        },
-    });
-
-    const lockReportMutation = useMutation({
-        mutationFn: async ({ id }) => {
-            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
-                finalized_by: currentUser.name,
-                finalized_by_email: currentUser.email,
-                finalized_date: getCurrentPacificTimeISO(),
-                rme_completed: true,
-                report_id: `RME-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-                tech_report_submitted: true,
-                status: 'LOCKED',
-            });
-            return response.data;
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-        },
-    });
-
-    const waitToLockMutation = useMutation({
-        mutationFn: async ({ id, reason, notes }) => {
-            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
-                wait_to_lock: true,
-                reason: reason,
-                notes: notes,
-                moved_created_by: currentUser.name,
-                moved_to_holding_date: getCurrentPacificTimeISO(),
-                tech_report_submitted: true,
-                status: 'HOLDING',
-            });
-            return response.data;
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-        },
-    });
-
-    const deleteReportMutation = useMutation({
-        mutationFn: async ({ id }) => {
-            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
-                finalized_by: currentUser.name,
-                finalized_by_email: currentUser.email,
-                finalized_date: getCurrentPacificTimeISO(),
-                rme_completed: true,
-                status: 'DELETED',
-            });
-            return response.data;
-        },
-        onSuccess: () => {
-            invalidateAndRefetch();
-        },
-    });
-
-    // Handle locked action with confirmation - FIXED: Properly set open to true
-    const handleLockedClick = (id, section, itemData) => {
-        setLockedConfirmModal({
-            open: true,
-            itemId: id,
-            itemData: itemData,
-            section: section,
-        });
-    };
-
-    const confirmLockedAction = async () => {
-        const { itemId } = lockedConfirmModal;
-
-        try {
-            await lockReportMutation.mutateAsync({
-                id: itemId,
-            });
-
-            showSnackbar('Report locked successfully', 'success');
-        } catch (error) {
-            console.error('Error locking report:', error);
-            showSnackbar('Failed to lock report', 'error');
-        } finally {
-            setLockedConfirmModal({ open: false, itemId: null, itemData: null, section: null });
-        }
-    };
-
-    // Handle discard action with confirmation - FIXED: Properly set open to true
-    const handleDiscardClick = (id, section, itemData) => {
-        setDiscardConfirmModal({
-            open: true,
-            itemId: id,
-            itemData: itemData,
-            section: section,
-        });
-    };
-
-    const confirmDiscardAction = async () => {
-        const { itemId } = discardConfirmModal;
-
-        try {
-            await deleteReportMutation.mutateAsync({ id: itemId });
-            showSnackbar('Report discarded successfully', 'success');
-        } catch (error) {
-            console.error('Error discarding report:', error);
-            showSnackbar('Failed to discard report', 'error');
-        } finally {
-            setDiscardConfirmModal({ open: false, itemId: null, itemData: null, section: null });
-        }
-    };
-
-    const handleWaitToLockToggle = (id) => {
-        const newSet = new Set(waitToLockAction);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-            const newDetails = { ...waitToLockDetails };
-            delete newDetails[id];
-            setWaitToLockDetails(newDetails);
-        } else {
-            newSet.add(id);
-            setWaitToLockDetails(prev => ({
-                ...prev,
-                [id]: { reason: '', notes: '' }
-            }));
-        }
-        setWaitToLockAction(newSet);
-    };
-
-    // Handle wait to lock details changes
-    const handleWaitToLockReasonChange = (id, reason) => {
-        setWaitToLockDetails(prev => ({
-            ...prev,
-            [id]: { ...prev[id], reason }
-        }));
-    };
-
-    const handleWaitToLockNotesChange = (id, notes) => {
-        setWaitToLockDetails(prev => ({
-            ...prev,
-            [id]: { ...prev[id], notes }
-        }));
-    };
-
-    // Pagination handlers
-    const handleChangePageReportNeeded = (event, newPage) => setPageReportNeeded(newPage);
-    const handleChangeRowsPerPageReportNeeded = (event) => {
-        setRowsPerPageReportNeeded(parseInt(event.target.value, 10));
-        setPageReportNeeded(0);
-    };
-
-    const handleChangePageReportSubmitted = (event, newPage) => setPageReportSubmitted(newPage);
-    const handleChangeRowsPerPageReportSubmitted = (event) => {
-        setRowsPerPageReportSubmitted(parseInt(event.target.value, 10));
-        setPageReportSubmitted(0);
-    };
-
-    const handleChangePageHolding = (event, newPage) => setPageHolding(newPage);
-    const handleChangeRowsPerPageHolding = (event) => {
-        setRowsPerPageHolding(parseInt(event.target.value, 10));
-        setPageHolding(0);
-    };
-
-    const handleChangePageFinalized = (event, newPage) => setPageFinalized(newPage);
-    const handleChangeRowsPerPageFinalized = (event) => {
-        setRowsPerPageFinalized(parseInt(event.target.value, 10));
-        setPageFinalized(0);
-    };
-
-    const handleChangeRecycleBinPage = (event, newPage) => setRecycleBinPage(newPage);
-    const handleChangeRecycleBinRowsPerPage = (event) => {
-        setRecycleBinRowsPerPage(parseInt(event.target.value, 10));
-        setRecycleBinPage(0);
-    };
-
-    // Show snackbar
-    const showSnackbar = (message, severity = 'success') => {
-        setSnackbar({ open: true, message, severity });
-    };
-
-    const handleCloseSnackbar = (event, reason) => {
-        if (reason === 'clickaway') return;
-        setSnackbar(prev => ({ ...prev, open: false }));
-    };
-
-    // Selection toggle functions
-    const toggleSelection = (setState, id) => {
-        setState(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) newSet.delete(id);
-            else newSet.add(id);
-            return newSet;
-        });
-    };
-
-    const toggleAllSelection = (items, pageItems, selectedSet) => {
-        const allPageIds = new Set(pageItems.map(item => item.id));
-        const currentSelected = new Set(selectedSet);
-        const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
-
-        if (allSelectedOnPage) {
-            const newSet = new Set(currentSelected);
-            allPageIds.forEach(id => newSet.delete(id));
-            return newSet;
-        } else {
-            const newSet = new Set([...currentSelected, ...allPageIds]);
-            return newSet;
-        }
-    };
-
-    // Recycle Bin selection functions
-    const toggleRecycleBinSelection = (itemKey) => {
-        setSelectedRecycleBinItems(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(itemKey)) newSet.delete(itemKey);
-            else newSet.add(itemKey);
-            return newSet;
-        });
-    };
-
-    const toggleAllRecycleBinSelection = () => {
-        const currentPageItems = recycleBinPageItems;
-        const allPageIds = new Set(currentPageItems.map(item => item.id.toString()));
-        const currentSelected = new Set(selectedRecycleBinItems);
-        const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
-
-        if (allSelectedOnPage) {
-            const newSet = new Set(currentSelected);
-            allPageIds.forEach(id => newSet.delete(id));
-            setSelectedRecycleBinItems(newSet);
-        } else {
-            const newSet = new Set([...currentSelected, ...allPageIds]);
-            setSelectedRecycleBinItems(newSet);
-        }
-    };
-
-    // Action handlers
-    const handleSoftDelete = async (selectionSet, section) => {
-        if (selectionSet.size === 0) return;
-        setSelectedForDeletion(selectionSet);
-        setDeletionSection(section);
-        setDeleteDialogOpen(true);
-    };
-
-    const executeSoftDelete = async () => {
-        try {
-            await bulkSoftDeleteMutation.mutateAsync(selectedForDeletion);
-            setSelectedReportNeeded(new Set());
-            setSelectedReportSubmitted(new Set());
-            setSelectedHolding(new Set());
-            setSelectedFinalized(new Set());
-            setSelectedForDeletion(new Set());
-            setDeleteDialogOpen(false);
-        } catch (error) {
-            console.error('Delete error:', error);
-        }
-    };
-
-    const handlePermanentDelete = async (selectionSet) => {
-        if (selectionSet.size === 0) return;
-        setSelectedForPermanentDeletion(selectionSet);
-        setPermanentDeleteDialogOpen(true);
-    };
-
-    const executePermanentDelete = async () => {
-        try {
-            await bulkPermanentDeleteMutation.mutateAsync(Array.from(selectedForPermanentDeletion));
-            setSelectedRecycleBinItems(new Set());
-            setPermanentDeleteDialogOpen(false);
-            setSelectedForPermanentDeletion(new Set());
-        } catch (error) {
-            console.error('Permanent delete error:', error);
-        }
-    };
-
-    const handleRestore = async (selectionSet) => {
-        if (selectionSet.size === 0) return;
-        setSelectedForRestore(selectionSet);
-        setRestoreDialogOpen(true);
-    };
-
-    const executeRestore = async () => {
-        try {
-            await bulkRestoreMutation.mutateAsync(Array.from(selectedForRestore));
-            setSelectedRecycleBinItems(new Set());
-            setRestoreDialogOpen(false);
-            setSelectedForRestore(new Set());
-        } catch (error) {
-            console.error('Restore error:', error);
-        }
-    };
-
-    // Handle save changes for Report Submitted table (only for Wait to Lock)
-    const handleSaveReportSubmittedChanges = async () => {
-        const selectedItems = reportSubmittedPageItems.filter(item =>
-            waitToLockAction.has(item.id)
-        );
-
-        const actions = {
-            waitToLock: [],
-            invalidCombinations: []
-        };
-
-        selectedItems.forEach(item => {
-            const hasWaitToLock = waitToLockAction.has(item.id);
-            if (hasWaitToLock) {
-                const details = waitToLockDetails[item.id] || { reason: '', notes: '' };
-                if (details.reason) {
-                    actions.waitToLock.push({
-                        id: item.id,
-                        reason: details.reason,
-                        notes: details.notes,
-                        rawData: item.rawData,
-                    });
-                } else {
-                    actions.invalidCombinations.push({
-                        id: item.id,
-                        address: item.address,
-                        error: 'Missing reason for Wait to Lock'
-                    });
-                }
-            }
-        });
-
-        // Execute API calls for Wait to Lock
-        try {
-            let message = '';
-
-            // Process wait to lock
-            if (actions.waitToLock.length > 0) {
-                for (const action of actions.waitToLock) {
-                    await waitToLockMutation.mutateAsync({
-                        id: action.id,
-                        reason: action.reason,
-                        notes: action.notes,
-                    });
-                }
-                message += `${actions.waitToLock.length} report(s) moved to Holding. `;
-            }
-
-            // Show errors for invalid combinations
-            if (actions.invalidCombinations.length > 0) {
-                const invalidAddresses = actions.invalidCombinations.map(ic => ic.address).join(', ');
-                message += `${actions.invalidCombinations.length} report(s) have errors: ${invalidAddresses}.`;
-                showSnackbar(message, 'warning');
-            } else if (message) {
-                showSnackbar(message, 'success');
-            } else {
-                showSnackbar('No Wait to Lock changes to save', 'info');
-            }
-
-            // Clear checkboxes after processing
-            setWaitToLockAction(new Set());
-            setWaitToLockDetails({});
-
-        } catch (error) {
-            console.error('Save changes error:', error);
-            showSnackbar('Failed to save changes', 'error');
-        }
-    };
-
-    // Handle single item actions in recycle bin
-    const handleSingleRestore = (item) => {
-        setSelectedSingleItem(item);
-        setSingleRestoreDialogOpen(true);
-    };
-
-    const handleSinglePermanentDelete = (item) => {
-        setSelectedSingleItem(item);
-        setSingleDeleteDialogOpen(true);
-    };
-
-    const executeSingleRestore = () => {
-        if (selectedSingleItem) {
-            restoreFromRecycleBinMutation.mutate(selectedSingleItem.id);
-        }
-    };
-
-    const executeSinglePermanentDelete = () => {
-        if (selectedSingleItem) {
-            permanentDeleteFromRecycleBinMutation.mutate(selectedSingleItem.id);
-        }
-    };
-
-    // Paginated items
-    const reportNeededPageItems = filteredReportNeeded.slice(
-        pageReportNeeded * rowsPerPageReportNeeded,
-        pageReportNeeded * rowsPerPageReportNeeded + rowsPerPageReportNeeded
-    );
-
-    const reportSubmittedPageItems = filteredReportSubmitted.slice(
-        pageReportSubmitted * rowsPerPageReportSubmitted,
-        pageReportSubmitted * rowsPerPageReportSubmitted + rowsPerPageReportSubmitted
-    );
-
-    const holdingPageItems = filteredHoldingReports.slice(
-        pageHolding * rowsPerPageHolding,
-        pageHolding * rowsPerPageHolding + rowsPerPageHolding
-    );
-
-    const finalizedPageItems = filteredFinalizedReports.slice(
-        pageFinalized * rowsPerPageFinalized,
-        pageFinalized * rowsPerPageFinalized + rowsPerPageFinalized
-    );
-
-    const recycleBinPageItems = deletedWorkOrders.slice(
-        recycleBinPage * recycleBinRowsPerPage,
-        recycleBinPage * recycleBinRowsPerPage + recycleBinRowsPerPage
-    );
-
-    // Get current timezone offset for Pacific Time
-    const getCurrentPacificTimezoneOffset = () => {
-        return isDaylightSavingTime(new Date()) ? PACIFIC_DAYLIGHT_OFFSET : PACIFIC_TIMEZONE_OFFSET;
-    };
-
-    // Loading state
-    if (isLoading) {
-        return <DashboardLoader />;
-    }
-
-    return (
-        <Box>
-            {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Box>
-                    <Typography
-                        sx={{
-                            fontWeight: 600,
-                            mb: 0.5,
-                            fontSize: '0.95rem',
-                            color: TEXT_COLOR,
-                            letterSpacing: '-0.01em',
-                        }}
-                    >
-                        RME Report Tracking
-                    </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: GRAY_COLOR,
-                            fontSize: '0.8rem',
-                            fontWeight: 400,
-                        }}
-                    >
-                        Track RME reports through 4 stages
-                    </Typography>
-                </Box>
-                <Button
-                    variant="outlined"
-                    startIcon={<History size={16} />}
-                    onClick={() => setRecycleBinModalOpen(true)}
-                    sx={{
-                        textTransform: 'none',
-                        fontSize: isMobile ? '0.75rem' : '0.85rem',
-                        fontWeight: 500,
-                        color: PURPLE_COLOR,
-                        borderColor: alpha(PURPLE_COLOR, 0.3),
-                        '&:hover': {
-                            borderColor: PURPLE_COLOR,
-                            backgroundColor: alpha(PURPLE_COLOR, 0.05),
-                        },
-                    }}
-                >
-                    {isMobile ? `Bin (${deletedWorkOrders.length})` : `Recycle Bin (${deletedWorkOrders.length})`}
-                </Button>
-            </Box>
-
-            {/* Stage 1: Report Needed Reports */}
-            <Section
-                title="Stage 1: Report Needed"
-                color={BLUE_COLOR}
-                count={filteredReportNeeded.length}
-                selectedCount={selectedReportNeeded.size}
-                additionalActions={
-                    <Box sx={{
-                        display: 'flex',
-                        flexDirection: isMobile ? 'column' : 'row',
-                        gap: 1,
-                        width: isMobile ? '100%' : 'auto',
-                        mt: isMobile ? 1 : 0
-                    }}>
-                        <SearchInput
-                            value={searchReportNeeded}
-                            onChange={setSearchReportNeeded}
-                            placeholder="Search report needed..."
-                            fullWidth={isMobile}
-                        />
-                        {isMobile && selectedReportNeeded.size > 0 && (
-                            <OutlineButton
-                                variant="outlined"
-                                color="error"
-                                size="small"
-                                startIcon={<Trash2 size={10} />}
-                                onClick={() => handleSoftDelete(selectedReportNeeded, 'Report Needed')}
-                            >
-                                Move to Bin ({selectedReportNeeded.size})
-                            </OutlineButton>
-                        )}
-                    </Box>
-                }
-                showDeleteButton={!isMobile && selectedReportNeeded.size > 0}
-                onDeleteAction={() => handleSoftDelete(selectedReportNeeded, 'Report Needed')}
-                isMobile={isMobile}
-            >
-                <ReportNeededTable
-                    items={reportNeededPageItems}
-                    selected={selectedReportNeeded}
-                    onToggleSelect={(id) => toggleSelection(setSelectedReportNeeded, id)}
-                    onToggleAll={() => setSelectedReportNeeded(toggleAllSelection(filteredReportNeeded, reportNeededPageItems, selectedReportNeeded))}
-                    color={BLUE_COLOR}
-                    totalCount={filteredReportNeeded.length}
-                    page={pageReportNeeded}
-                    rowsPerPage={rowsPerPageReportNeeded}
-                    onPageChange={handleChangePageReportNeeded}
-                    onRowsPerPageChange={handleChangeRowsPerPageReportNeeded}
-                    onViewPDF={handleViewPDF}
-                    isMobile={isMobile}
-                />
-            </Section>
-
-            {/* Stage 2: Report Submitted */}
-            <Section
-                title="Stage 2: Report Submitted"
-                color={CYAN_COLOR}
-                count={filteredReportSubmitted.length}
-                selectedCount={selectedReportSubmitted.size}
-                additionalActions={
-                    <Box sx={{
-                        display: 'flex',
-                        flexDirection: isMobile ? 'column' : 'row',
-                        gap: 1,
-                        width: isMobile ? '100%' : 'auto',
-                        mt: isMobile ? 1 : 0
-                    }}>
-                        <SearchInput
-                            value={searchReportSubmitted}
-                            onChange={setSearchReportSubmitted}
-                            placeholder="Search report submitted..."
-                            fullWidth={isMobile}
-                        />
-                        {isMobile && (
-                            <Box sx={{
-                                gap: 1,
-                                width: '100%'
-                            }}>
-                                {selectedReportSubmitted.size > 0 && (
-                                    <Button
-                                        variant="outlined"
-                                        color="error"
-                                        size="small"
-                                        onClick={() => handleSoftDelete(selectedReportSubmitted, 'Report Submitted')}
-                                        startIcon={<Trash2 size={14} />}
-                                        sx={{
-                                            textTransform: 'none',
-                                            fontSize: '0.75rem',
-                                            height: '30px',
-                                            flex: 1,
-                                        }}
-                                    >
-                                        Bin ({selectedReportSubmitted.size})
-                                    </Button>
-                                )}
-                            </Box>
-                        )}
-                    </Box>
-                }
-                showDeleteButton={!isMobile && selectedReportSubmitted.size > 0}
-                onDeleteAction={() => handleSoftDelete(selectedReportSubmitted, 'Report Submitted')}
-                isMobile={isMobile}
-            >
-                <ReportSubmittedTable
-                    items={reportSubmittedPageItems}
-                    selected={selectedReportSubmitted}
-                    onToggleSelect={(id) => toggleSelection(setSelectedReportSubmitted, id)}
-                    onToggleAll={() => setSelectedReportSubmitted(toggleAllSelection(filteredReportSubmitted, reportSubmittedPageItems, selectedReportSubmitted))}
-                    onLockedClick={(id, itemData) => handleLockedClick(id, 'reportSubmitted', itemData)}
-                    waitToLockAction={waitToLockAction}
-                    onWaitToLockToggle={handleWaitToLockToggle}
-                    onDiscardClick={(id, itemData) => handleDiscardClick(id, 'reportSubmitted', itemData)}
-                    waitToLockDetails={waitToLockDetails}
-                    onWaitToLockReasonChange={handleWaitToLockReasonChange}
-                    onWaitToLockNotesChange={handleWaitToLockNotesChange}
-                    onSaveChanges={handleSaveReportSubmittedChanges}
-                    waitToLockActionSize={waitToLockAction.size}
-                    onEditClick={handleEditClick}
-                    color={CYAN_COLOR}
-                    totalCount={filteredReportSubmitted.length}
-                    page={pageReportSubmitted}
-                    rowsPerPage={rowsPerPageReportSubmitted}
-                    onPageChange={handleChangePageReportSubmitted}
-                    onRowsPerPageChange={handleChangeRowsPerPageReportSubmitted}
-                    onViewPDF={handleViewPDF}
-                    isMobile={isMobile}
-                />
-            </Section>
-
-            {/* Stage 3: Holding Reports */}
-            <Section
-                title="Stage 3: Holding"
-                color={ORANGE_COLOR}
-                count={filteredHoldingReports.length}
-                selectedCount={selectedHolding.size}
-                additionalActions={
-                    <Box sx={{
-                        display: 'flex',
-                        flexDirection: isMobile ? 'column' : 'row',
-                        gap: 1,
-                        width: isMobile ? '100%' : 'auto',
-                        mt: isMobile ? 1 : 0
-                    }}>
-                        <SearchInput
-                            value={searchHolding}
-                            onChange={setSearchHolding}
-                            placeholder="Search holding..."
-                            fullWidth={isMobile}
-                        />
-                        {isMobile && selectedHolding.size > 0 && (
-                            <OutlineButton
-                                variant="outlined"
-                                color="error"
-                                size="small"
-                                onClick={() => handleSoftDelete(selectedHolding, 'Holding')}
-                                startIcon={<Trash2 size={14} />}
-                            >
-                                Move to Bin ({selectedHolding.size})
-                            </OutlineButton>
-                        )}
-                    </Box>
-                }
-                showDeleteButton={!isMobile && selectedHolding.size > 0}
-                onDeleteAction={() => handleSoftDelete(selectedHolding, 'Holding')}
-                isMobile={isMobile}
-            >
-                <HoldingTable
-                    items={holdingPageItems}
-                    selected={selectedHolding}
-                    onToggleSelect={(id) => toggleSelection(setSelectedHolding, id)}
-                    onToggleAll={() => setSelectedHolding(toggleAllSelection(filteredHoldingReports, holdingPageItems, selectedHolding))}
-                    onLockedClick={(id, itemData) => handleLockedClick(id, 'holding', itemData)}
-                    onDiscardClick={(id, itemData) => handleDiscardClick(id, 'holding', itemData)}
-                    onEditClick={handleEditClick}
-                    color={ORANGE_COLOR}
-                    totalCount={filteredHoldingReports.length}
-                    page={pageHolding}
-                    rowsPerPage={rowsPerPageHolding}
-                    onPageChange={handleChangePageHolding}
-                    onRowsPerPageChange={handleChangeRowsPerPageHolding}
-                    onViewPDF={handleViewPDF}
-                    isMobile={isMobile}
-                />
-            </Section>
-
-            {/* Stage 4: Finalized Reports */}
-            <Section
-                title="Stage 4: Finalized"
-                color={GREEN_COLOR}
-                count={filteredFinalizedReports.length}
-                selectedCount={selectedFinalized.size}
-                additionalActions={
-                    <Box sx={{
-                        display: 'flex',
-                        flexDirection: isMobile ? 'column' : 'row',
-                        gap: 1,
-                        width: isMobile ? '100%' : 'auto',
-                        mt: isMobile ? 1 : 0
-                    }}>
-                        <SearchInput
-                            value={searchFinalized}
-                            onChange={setSearchFinalized}
-                            placeholder="Search finalized..."
-                            fullWidth={isMobile}
-                        />
-                        {isMobile && selectedFinalized.size > 0 && (
-                            <OutlineButton
-                                variant="outlined"
-                                color="error"
-                                size="small"
-                                onClick={() => handleSoftDelete(selectedFinalized, 'Finalized')}
-                                startIcon={<Trash2 size={14} />}
-                            >
-                                Move to Bin ({selectedFinalized.size})
-                            </OutlineButton>
-                        )}
-                    </Box>
-                }
-                showDeleteButton={!isMobile && selectedFinalized.size > 0}
-                onDeleteAction={() => handleSoftDelete(selectedFinalized, 'Finalized')}
-                isMobile={isMobile}
-            >
-                <FinalizedTable
-                    items={finalizedPageItems}
-                    selected={selectedFinalized}
-                    onToggleSelect={(id) => toggleSelection(setSelectedFinalized, id)}
-                    onToggleAll={() => setSelectedFinalized(toggleAllSelection(filteredFinalizedReports, finalizedPageItems, selectedFinalized))}
-                    color={GREEN_COLOR}
-                    totalCount={filteredFinalizedReports.length}
-                    page={pageFinalized}
-                    rowsPerPage={rowsPerPageFinalized}
-                    onPageChange={handleChangePageFinalized}
-                    onRowsPerPageChange={handleChangeRowsPerPageFinalized}
-                    isMobile={isMobile}
-                />
-            </Section>
-
-            {/* PDF Viewer Modal */}
-            <PDFViewerModal
-                open={pdfViewerOpen}
-                onClose={() => setPdfViewerOpen(false)}
-                pdfUrl={currentPdfUrl}
-            />
-
-            {/* Edit Form Modal */}
-            <EditFormModal
-                open={editFormModalOpen}
-                onClose={() => setEditFormModalOpen(false)}
-                workOrderData={selectedWorkOrder}
-                onSave={handleSaveForm}
-            />
-
-            {/* Recycle Bin Modal */}
-            <RmeRecycleBinModal
-                open={recycleBinModalOpen}
-                onClose={() => setRecycleBinModalOpen(false)}
-                recycleBinItems={deletedWorkOrders}
-                isRecycleBinLoading={false}
-                recycleBinSearch={recycleBinSearch}
-                setRecycleBinSearch={setRecycleBinSearch}
-                recycleBinPage={recycleBinPage}
-                recycleBinRowsPerPage={recycleBinRowsPerPage}
-                handleChangeRecycleBinPage={handleChangeRecycleBinPage}
-                handleChangeRecycleBinRowsPerPage={handleChangeRecycleBinRowsPerPage}
-                selectedRecycleBinItems={selectedRecycleBinItems}
-                toggleRecycleBinSelection={toggleRecycleBinSelection}
-                toggleAllRecycleBinSelection={toggleAllRecycleBinSelection}
-                confirmBulkRestore={() => handleRestore(selectedRecycleBinItems)}
-                confirmBulkPermanentDelete={() => handlePermanentDelete(selectedRecycleBinItems)}
-                handleSingleRestore={handleSingleRestore}
-                handleSinglePermanentDelete={handleSinglePermanentDelete}
-                restoreFromRecycleBinMutation={restoreFromRecycleBinMutation}
-                permanentDeleteFromRecycleBinMutation={permanentDeleteFromRecycleBinMutation}
-                bulkRestoreMutation={bulkRestoreMutation}
-                bulkPermanentDeleteMutation={bulkPermanentDeleteMutation}
-                itemType="work-order"
-                timezoneOffset={getCurrentPacificTimezoneOffset()}
-                isMobile={isMobile}
-                isSmallMobile={isSmallMobile}
-            />
-
-            {/* Move to Recycle Bin Dialog */}
-            <Dialog
-                open={deleteDialogOpen}
-                onClose={() => setDeleteDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                        border: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
-                    }
-                }}
-            >
-                <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
-                    pb: 1.5,
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: alpha(ORANGE_COLOR, 0.1),
-                            color: ORANGE_COLOR,
-                        }}>
-                            <Trash2 size={18} />
-                        </Box>
-                        <Box>
-                            <Typography variant="h6" sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.95rem',
-                                fontWeight: 600,
-                                lineHeight: 1.2,
-                            }}>
-                                Move to Recycle Bin
-                            </Typography>
-                            <Typography variant="caption" sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}>
-                                Items can be restored from recycle bin
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogTitle>
-                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            mb: 2,
-                        }}
-                    >
-                        Are you sure you want to move <strong>{selectedForDeletion.size} item(s)</strong> from the <strong>{deletionSection}</strong> section to recycle bin?
-                    </Typography>
-                    <Box sx={{
-                        p: 1.5,
-                        borderRadius: '6px',
-                        backgroundColor: alpha(ORANGE_COLOR, 0.05),
-                        border: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 1.5,
-                    }}>
-                        <AlertCircle size={18} color={ORANGE_COLOR} />
-                        <Box>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: ORANGE_COLOR,
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    mb: 0.5,
-                                }}
-                            >
-                                Note
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 400,
-                                }}
-                            >
-                                Items moved to recycle bin can be restored later. Permanent deletion is only available in the recycle bin.
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 1.5 }}>
-                    <Button
-                        onClick={() => setDeleteDialogOpen(false)}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={executeSoftDelete}
-                        variant="contained"
-                        color="warning"
-                        startIcon={<Trash2 size={16} />}
-                        disabled={bulkSoftDeleteMutation.isPending}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: ORANGE_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(ORANGE_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        {bulkSoftDeleteMutation.isPending ? 'Moving...' : 'Move to Recycle Bin'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Restore Dialog */}
-            <Dialog
-                open={restoreDialogOpen}
-                onClose={() => setRestoreDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
-                    }
-                }}
-            >
-                <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
-                    pb: 1.5,
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: alpha(GREEN_COLOR, 0.1),
-                            color: GREEN_COLOR,
-                        }}>
-                            <RotateCcw size={18} />
-                        </Box>
-                        <Box>
-                            <Typography variant="h6" sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.95rem',
-                                fontWeight: 600,
-                                lineHeight: 1.2,
-                            }}>
-                                Restore Items
-                            </Typography>
-                            <Typography variant="caption" sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}>
-                                Restore items from recycle bin
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogTitle>
-                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            mb: 2,
-                        }}
-                    >
-                        Are you sure you want to restore <strong>{selectedForRestore.size} item(s)</strong> from recycle bin?
-                    </Typography>
-                    <Box sx={{
-                        p: 1.5,
-                        borderRadius: '6px',
-                        backgroundColor: alpha(GREEN_COLOR, 0.05),
-                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 1.5,
-                    }}>
-                        <AlertCircle size={18} color={GREEN_COLOR} />
-                        <Box>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: GREEN_COLOR,
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    mb: 0.5,
-                                }}
-                            >
-                                Note
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 400,
-                                }}
-                            >
-                                Restored items will be moved back to the Report Needed stage.
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 1.5 }}>
-                    <Button
-                        onClick={() => setRestoreDialogOpen(false)}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={executeRestore}
-                        variant="contained"
-                        color="success"
-                        startIcon={<RotateCcw size={16} />}
-                        disabled={bulkRestoreMutation.isPending}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: GREEN_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(GREEN_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        {bulkRestoreMutation.isPending ? 'Restoring...' : 'Restore Items'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Permanent Delete Dialog */}
-            <Dialog
-                open={permanentDeleteDialogOpen}
-                onClose={() => setPermanentDeleteDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                    }
-                }}
-            >
-                <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                    pb: 1.5,
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: alpha(RED_COLOR, 0.1),
-                            color: RED_COLOR,
-                        }}>
-                            <Trash2 size={18} />
-                        </Box>
-                        <Box>
-                            <Typography variant="h6" sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.95rem',
-                                fontWeight: 600,
-                                lineHeight: 1.2,
-                            }}>
-                                Permanent Delete
-                            </Typography>
-                            <Typography variant="caption" sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}>
-                                Permanently delete items from recycle bin
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogTitle>
-                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            mb: 2,
-                        }}
-                    >
-                        Are you sure you want to permanently delete <strong>{selectedForPermanentDeletion.size} item(s)</strong> from recycle bin?
-                    </Typography>
-                    <Box sx={{
-                        p: 1.5,
-                        borderRadius: '6px',
-                        backgroundColor: alpha(RED_COLOR, 0.05),
-                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 1.5,
-                    }}>
-                        <AlertTriangle size={18} color={RED_COLOR} />
-                        <Box>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: RED_COLOR,
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    mb: 0.5,
-                                }}
-                            >
-                                Warning: This action cannot be undone
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 400,
-                                }}
-                            >
-                                Items will be permanently deleted and cannot be recovered.
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 1.5 }}>
-                    <Button
-                        onClick={() => setPermanentDeleteDialogOpen(false)}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={executePermanentDelete}
-                        variant="contained"
-                        color="error"
-                        startIcon={<Trash2 size={16} />}
-                        disabled={bulkPermanentDeleteMutation.isPending}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: RED_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(RED_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        {bulkPermanentDeleteMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Single Restore Dialog */}
-            <Dialog
-                open={singleRestoreDialogOpen}
-                onClose={() => setSingleRestoreDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                    }
-                }}
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <RotateCcw size={20} color={GREEN_COLOR} />
-                        <Typography variant="h6" sx={{ fontSize: '0.95rem', fontWeight: 600 }}>
-                            Restore Item
-                        </Typography>
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        Are you sure you want to restore work order <strong>{selectedSingleItem?.wo_number}</strong>?
-                    </Typography>
-                </DialogContent>
-                <DialogActions>
-                    <Button
-                        onClick={() => {
-                            setSingleRestoreDialogOpen(false);
-                            setSelectedSingleItem(null);
-                        }}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="success"
-                        onClick={executeSingleRestore}
-                        disabled={restoreFromRecycleBinMutation.isPending}
-                        startIcon={<RotateCcw size={16} />}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: GREEN_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(GREEN_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        {restoreFromRecycleBinMutation.isPending ? 'Restoring...' : 'Restore'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Single Delete Dialog */}
-            <Dialog
-                open={singleDeleteDialogOpen}
-                onClose={() => setSingleDeleteDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                    }
-                }}
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Trash2 size={20} color={RED_COLOR} />
-                        <Typography variant="h6" sx={{ fontSize: '0.95rem', fontWeight: 600 }}>
-                            Permanent Delete
-                        </Typography>
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        Are you sure you want to permanently delete work order <strong>{selectedSingleItem?.wo_number}</strong>?
-                        This action cannot be undone.
-                    </Typography>
-                    <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                        Item will be permanently removed and cannot be recovered.
-                    </Alert>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => {
-                        setSingleDeleteDialogOpen(false);
-                        setSelectedSingleItem(null);
-                    }}
-                        variant='outlined'
-                        color='error'
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="error"
-                        onClick={executeSinglePermanentDelete}
-                        disabled={permanentDeleteFromRecycleBinMutation.isPending}
-                        startIcon={<Trash2 size={16} />}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                        }}
-                    >
-                        {permanentDeleteFromRecycleBinMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Locked Confirmation Modal */}
-            <Dialog
-                open={lockedConfirmModal.open}
-                onClose={() => setLockedConfirmModal({ ...lockedConfirmModal, open: false })}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
-                    }
-                }}
-            >
-                <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
-                    pb: 1.5,
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: alpha(GREEN_COLOR, 0.1),
-                            color: GREEN_COLOR,
-                        }}>
-                            <img
-                                src={locked}
-                                alt="locked"
-                                style={{
-                                    width: '18px',
-                                    height: '18px',
-                                }}
-                            />
-                        </Box>
-                        <Box>
-                            <Typography variant="h6" sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.95rem',
-                                fontWeight: 600,
-                                lineHeight: 1.2,
-                            }}>
-                                Confirm Lock Action
-                            </Typography>
-                            <Typography variant="caption" sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}>
-                                Lock report and move to Finalized
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogTitle>
-                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            mb: 2,
-                        }}
-                    >
-                        Are you sure you want to lock this report and move it to Finalized?
-                    </Typography>
-                    {lockedConfirmModal.itemData && (
-                        <Box sx={{
-                            p: 1.5,
-                            borderRadius: '6px',
-                            backgroundColor: alpha(GREEN_COLOR, 0.05),
-                            border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
-                            mb: 2,
-                        }}>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    mb: 0.5,
-                                }}
-                            >
-                                {lockedConfirmModal.itemData.street}
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: GRAY_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 400,
-                                }}
-                            >
-                                {lockedConfirmModal.itemData.city}, {lockedConfirmModal.itemData.state} {lockedConfirmModal.itemData.zip}
-                            </Typography>
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 1.5 }}>
-                    <Button
-                        onClick={() => setLockedConfirmModal({ ...lockedConfirmModal, open: false })}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={confirmLockedAction}
-                        variant="contained"
-                        color="success"
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: GREEN_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(GREEN_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        Lock Report
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Discard Confirmation Modal */}
-            <Dialog
-                open={discardConfirmModal.open}
-                onClose={() => setDiscardConfirmModal({ ...discardConfirmModal, open: false })}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'white',
-                        borderRadius: '6px',
-                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                    }
-                }}
-            >
-                <DialogTitle sx={{
-                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                    pb: 1.5,
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: alpha(RED_COLOR, 0.1),
-                            color: RED_COLOR,
-                        }}>
-                            <img
-                                src={discard}
-                                alt="discard"
-                                style={{
-                                    width: '18px',
-                                    height: '18px',
-                                }}
-                            />
-                        </Box>
-                        <Box>
-                            <Typography variant="h6" sx={{
-                                color: TEXT_COLOR,
-                                fontSize: '0.95rem',
-                                fontWeight: 600,
-                                lineHeight: 1.2,
-                            }}>
-                                Confirm Discard Action
-                            </Typography>
-                            <Typography variant="caption" sx={{
-                                color: GRAY_COLOR,
-                                fontSize: '0.75rem',
-                                fontWeight: 400,
-                            }}>
-                                Discard report and move to Finalized as "DELETED"
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogTitle>
-                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            mb: 2,
-                        }}
-                    >
-                        Are you sure you want to discard this report and mark it as "DELETED"?
-                    </Typography>
-                    {discardConfirmModal.itemData && (
-                        <Box sx={{
-                            p: 1.5,
-                            borderRadius: '6px',
-                            backgroundColor: alpha(RED_COLOR, 0.05),
-                            border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
-                            mb: 2,
-                        }}>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: TEXT_COLOR,
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    mb: 0.5,
-                                }}
-                            >
-                                {discardConfirmModal.itemData.street}
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: GRAY_COLOR,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 400,
-                                }}
-                            >
-                                {discardConfirmModal.itemData.city}, {discardConfirmModal.itemData.state} {discardConfirmModal.itemData.zip}
-                            </Typography>
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 1.5 }}>
-                    <Button
-                        onClick={() => setDiscardConfirmModal({ ...discardConfirmModal, open: false })}
-                        sx={{
-                            textTransform: 'none',
-                            color: TEXT_COLOR,
-                            fontSize: '0.85rem',
-                            fontWeight: 400,
-                            px: 2,
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={confirmDiscardAction}
-                        variant="contained"
-                        color="error"
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            px: 2,
-                            bgcolor: RED_COLOR,
-                            boxShadow: 'none',
-                            '&:hover': {
-                                bgcolor: alpha(RED_COLOR, 0.9),
-                                boxShadow: 'none',
-                            },
-                        }}
-                    >
-                        Discard Report
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Snackbar */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={3000}
-                onClose={handleCloseSnackbar}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={handleCloseSnackbar}
-                    severity={snackbar.severity}
-                    iconMapping={{
-                        success: <CheckCircle size={20} />,
-                        error: <AlertCircle size={20} />,
-                        warning: <AlertTriangle size={20} />,
-                        info: <AlertCircle size={20} />,
-                    }}
-                    sx={{
-                        width: '100%',
-                        borderRadius: '6px',
-                        backgroundColor: snackbar.severity === 'success'
-                            ? alpha(GREEN_COLOR, 0.05)
-                            : snackbar.severity === 'error'
-                                ? alpha(RED_COLOR, 0.05)
-                                : snackbar.severity === 'warning'
-                                    ? alpha(ORANGE_COLOR, 0.05)
-                                    : alpha(BLUE_COLOR, 0.05),
-                        borderLeft: `4px solid ${snackbar.severity === 'success' ? GREEN_COLOR :
-                            snackbar.severity === 'error' ? RED_COLOR :
-                                snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR}`,
-                        '& .MuiAlert-icon': {
-                            color: snackbar.severity === 'success' ? GREEN_COLOR :
-                                snackbar.severity === 'error' ? RED_COLOR :
-                                    snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR,
-                        },
-                        '& .MuiAlert-message': {
-                            py: 0.5,
-                        }
-                    }}
-                    elevation={6}
-                >
-                    <Typography
-                        sx={{
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            color: TEXT_COLOR,
-                        }}
-                    >
-                        {snackbar.message}
-                    </Typography>
-                </Alert>
-            </Snackbar>
-        </Box>
     );
 };
 
@@ -2831,10 +999,6 @@ const ReportNeededTable = ({
                 borderRadius: '4px',
             },
         }}>
-            <Helmet>
-                <title>RME Reports | Sterling Septic & Plumbing LLC</title>
-                <meta name="description" content="Super Admin RME Reports page" />
-            </Helmet>
             <Table size="small" sx={{ minWidth: isMobile ? 1000 : 'auto' }}>
                 <TableHead>
                     <TableRow sx={{
@@ -4154,6 +2318,2035 @@ const FinalizedTable = ({
                 />
             )}
         </TableContainer>
+    );
+};
+
+// Main Component
+const RMEReports = () => {
+    const queryClient = useQueryClient();
+    const { user: authUser } = useAuth();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+    // State for each table's selection
+    const [selectedReportNeeded, setSelectedReportNeeded] = useState(new Set());
+    const [selectedReportSubmitted, setSelectedReportSubmitted] = useState(new Set());
+    const [selectedHolding, setSelectedHolding] = useState(new Set());
+    const [selectedFinalized, setSelectedFinalized] = useState(new Set());
+
+    // State for actions checkboxes in report submitted table
+    const [waitToLockAction, setWaitToLockAction] = useState(new Set());
+
+    // State for action details (for wait to lock)
+    const [waitToLockDetails, setWaitToLockDetails] = useState({});
+
+    // Pagination for each table
+    const [pageReportNeeded, setPageReportNeeded] = useState(0);
+    const [rowsPerPageReportNeeded, setRowsPerPageReportNeeded] = useState(isMobile ? 5 : 10);
+    const [pageReportSubmitted, setPageReportSubmitted] = useState(0);
+    const [rowsPerPageReportSubmitted, setRowsPerPageReportSubmitted] = useState(isMobile ? 5 : 10);
+    const [pageHolding, setPageHolding] = useState(0);
+    const [rowsPerPageHolding, setRowsPerPageHolding] = useState(isMobile ? 5 : 10);
+    const [pageFinalized, setPageFinalized] = useState(0);
+    const [rowsPerPageFinalized, setRowsPerPageFinalized] = useState(isMobile ? 5 : 10);
+
+    // Search states
+    const [searchReportNeeded, setSearchReportNeeded] = useState('');
+    const [searchReportSubmitted, setSearchReportSubmitted] = useState('');
+    const [searchHolding, setSearchHolding] = useState('');
+    const [searchFinalized, setSearchFinalized] = useState('');
+
+    // Recycle Bin modal states
+    const [recycleBinModalOpen, setRecycleBinModalOpen] = useState(false);
+    const [recycleBinSearch, setRecycleBinSearch] = useState('');
+    const [recycleBinPage, setRecycleBinPage] = useState(0);
+    const [recycleBinRowsPerPage, setRecycleBinRowsPerPage] = useState(isMobile ? 5 : 10);
+    const [selectedRecycleBinItems, setSelectedRecycleBinItems] = useState(new Set());
+
+    // Dialog states
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
+    const [deletionSection, setDeletionSection] = useState('');
+
+    const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
+    const [selectedForPermanentDeletion, setSelectedForPermanentDeletion] = useState(new Set());
+
+    const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+    const [selectedForRestore, setSelectedForRestore] = useState(new Set());
+
+    // PDF Viewer state
+    const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+    const [currentPdfUrl, setCurrentPdfUrl] = useState('');
+
+    // Edit Form Modal state
+    const [editFormModalOpen, setEditFormModalOpen] = useState(false);
+    const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
+
+    // Confirmation modals for actions
+    const [lockedConfirmModal, setLockedConfirmModal] = useState({
+        open: false,
+        itemId: null,
+        itemData: null,
+        section: null,
+    });
+
+    const [discardConfirmModal, setDiscardConfirmModal] = useState({
+        open: false,
+        itemId: null,
+        itemData: null,
+        section: null,
+    });
+
+    // Single action modals for recycle bin
+    const [singleRestoreDialogOpen, setSingleRestoreDialogOpen] = useState(false);
+    const [singleDeleteDialogOpen, setSingleDeleteDialogOpen] = useState(false);
+    const [selectedSingleItem, setSelectedSingleItem] = useState(null);
+
+    // Snackbar
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success',
+    });
+
+    // Fetch all work orders
+    const { data: workOrders = [], isLoading } = useQuery({
+        queryKey: ['rme-work-orders'],
+        queryFn: async () => {
+            const res = await axiosInstance.get('/work-orders-today/');
+            return Array.isArray(res.data) ? res.data : [];
+        },
+        staleTime: 30000,
+        refetchInterval: 60000,
+    });
+
+    // Fetch only deleted work orders for recycle bin
+    const { data: deletedWorkOrders = [] } = useQuery({
+        queryKey: ['rme-deleted-work-orders'],
+        queryFn: async () => {
+            const res = await axiosInstance.get('/work-orders-today/');
+            const allOrders = Array.isArray(res.data) ? res.data : [];
+            return allOrders.filter(order => order.is_deleted);
+        },
+        staleTime: 30000,
+        refetchInterval: 60000,
+    });
+
+    // Initialize checkbox states from API data
+    useEffect(() => {
+        if (workOrders.length > 0) {
+            const newWaitToLockDetails = {};
+
+            workOrders.forEach(item => {
+                if (!item.is_deleted && !item.finalized_by && !item.wait_to_lock && !item.moved_to_holding_date) {
+                    if (item.wait_to_lock) {
+                        newWaitToLockDetails[item.id.toString()] = {
+                            reason: item.reason || '',
+                            notes: item.notes || ''
+                        };
+                    }
+                }
+            });
+
+            setWaitToLockDetails(newWaitToLockDetails);
+        }
+    }, [workOrders]);
+
+    // Get current user from auth
+    const currentUser = useMemo(() => {
+        return authUser ? {
+            name: authUser.name || authUser.full_name || authUser.username || 'Unknown User',
+            email: authUser.email || authUser.email_address || 'unknown@example.com',
+            id: authUser.id || authUser.user_id || 'unknown'
+        } : {
+            name: 'Unknown User',
+            email: 'unknown@example.com',
+            id: 'unknown'
+        };
+    }, [authUser]);
+
+    // Process data for different stages with Pacific Time formatting
+    const processedData = useMemo(() => {
+        const reportNeeded = [];
+        const reportSubmitted = [];
+        const holding = [];
+        const finalized = [];
+
+        workOrders.forEach(item => {
+            const report = {
+                id: item.id.toString(),
+                woNumber: item.wo_number || 'N/A',
+                date: formatDate(item.scheduled_date),
+                scheduledDate: item.scheduled_date,
+                elapsedTime: calculateElapsedTime(item.scheduled_date),
+                elapsedColor: getElapsedColor(item.scheduled_date),
+                technician: item.technician || 'Unassigned',
+                technicianInitial: getTechnicianInitial(item.technician),
+                address: item.full_address || 'No address',
+                street: item.full_address ? item.full_address.split(',')[0]?.trim() || 'Unknown' : 'Unknown',
+                city: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[0] || 'Unknown' : 'Unknown',
+                state: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[1] || 'Unknown' : 'Unknown',
+                zip: item.full_address ? item.full_address.split(',')[1]?.trim().split(' ')[2] || 'Unknown' : 'Unknown',
+                lastReport: !!item.last_report_link,
+                lastReportLink: item.last_report_link,
+                unlockedReport: !!item.unlocked_report_link,
+                unlockedReportLink: item.unlocked_report_link,
+                techReportSubmitted: item.tech_report_submitted || false,
+                waitToLock: item.wait_to_lock || false,
+                reason: item.reason || '',
+                notes: item.notes || '',
+                movedToHoldingDate: item.moved_to_holding_date,
+                isDeleted: item.is_deleted || false,
+                deletedBy: item.deleted_by,
+                deletedDate: item.deleted_date,
+                deletedDateFormatted: formatDateTimeWithTZ(item.deleted_date),
+                finalizedBy: item.finalized_by,
+                finalizedByEmail: item.finalized_by_email,
+                finalizedDate: item.finalized_date,
+                finalizedDateFormatted: formatDateTimeWithTZ(item.finalized_date),
+                reportId: item.report_id,
+                createdAt: item.scheduled_date,
+                timeCompleted: formatTime(item.scheduled_date),
+                scheduledDateFormatted: formatDateTimeWithTZ(item.scheduled_date),
+                movedToHoldingDateFormatted: formatDateTimeWithTZ(item.moved_to_holding_date),
+                rawData: item,
+                currentUser: currentUser,
+            };
+
+            if (item.is_deleted) {
+                // Deleted items go to recycle bin
+            } else if (item.status === 'DELETED' && item.rme_completed) {
+                finalized.push({
+                    ...report,
+                    action: 'deleted',
+                    actionTime: item.finalized_date || item.updated_at || item.created_at,
+                    actionTimeFormatted: formatDateTimeWithTZ(item.finalized_date || item.updated_at || item.created_at),
+                    by: item.finalized_by || 'System',
+                    byEmail: item.finalized_by_email || '',
+                    status: 'DELETED',
+                    statusColor: RED_COLOR,
+                    isStatusDeleted: true,
+                });
+            } else if (item.finalized_by && item.rme_completed) {
+                finalized.push({
+                    ...report,
+                    action: 'locked',
+                    actionTime: item.finalized_date,
+                    actionTimeFormatted: formatDateTimeWithTZ(item.finalized_date),
+                    by: item.finalized_by,
+                    byEmail: item.finalized_by_email || '',
+                    status: 'LOCKED',
+                    statusColor: GREEN_COLOR,
+                });
+            } else if (item.wait_to_lock || item.moved_to_holding_date) {
+                holding.push({
+                    ...report,
+                    priorLockedReport: !!item.last_report_link,
+                    reason: item.reason || 'Pending Review',
+                });
+            } else if (item.tech_report_submitted) {
+                reportSubmitted.push(report);
+            } else {
+                reportNeeded.push(report);
+            }
+        });
+
+        return { reportNeeded, reportSubmitted, holding, finalized };
+    }, [workOrders, currentUser]);
+
+    // Filter functions for each table with search
+    const filteredReportNeeded = useMemo(() => {
+        let filtered = processedData.reportNeeded;
+        if (searchReportNeeded) {
+            const searchLower = searchReportNeeded.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.street?.toLowerCase().includes(searchLower) ||
+                report.city?.toLowerCase().includes(searchLower) ||
+                report.woNumber?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.reportNeeded, searchReportNeeded]);
+
+    const filteredReportSubmitted = useMemo(() => {
+        let filtered = processedData.reportSubmitted;
+        if (searchReportSubmitted) {
+            const searchLower = searchReportSubmitted.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.street?.toLowerCase().includes(searchLower) ||
+                report.city?.toLowerCase().includes(searchLower) ||
+                report.woNumber?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.reportSubmitted, searchReportSubmitted]);
+
+    const filteredHoldingReports = useMemo(() => {
+        let filtered = processedData.holding;
+        if (searchHolding) {
+            const searchLower = searchHolding.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.reason?.toLowerCase().includes(searchLower) ||
+                report.notes?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.holding, searchHolding]);
+
+    const filteredFinalizedReports = useMemo(() => {
+        let filtered = processedData.finalized;
+        if (searchFinalized) {
+            const searchLower = searchFinalized.toLowerCase();
+            filtered = filtered.filter(report =>
+                report.by?.toLowerCase().includes(searchLower) ||
+                report.address?.toLowerCase().includes(searchLower) ||
+                report.technician?.toLowerCase().includes(searchLower) ||
+                report.status?.toLowerCase().includes(searchLower) ||
+                report.reportId?.toLowerCase().includes(searchLower)
+            );
+        }
+        return filtered;
+    }, [processedData.finalized, searchFinalized]);
+
+    // Handle PDF view
+    const handleViewPDF = (pdfUrl) => {
+        setCurrentPdfUrl(pdfUrl);
+        setPdfViewerOpen(true);
+    };
+
+    // Handle Edit button click - opens the edit form modal
+    const handleEditClick = (item) => {
+        setSelectedWorkOrder(item);
+        setEditFormModalOpen(true);
+    };
+
+    // Handle save from edit form
+    const handleSaveForm = (formData, serverResponse) => {
+        showSnackbar('Form saved successfully', 'success');
+        queryClient.invalidateQueries(['rme-work-orders']);
+        setEditFormModalOpen(false);
+    };
+
+    // Show snackbar
+    const showSnackbar = (message, severity = 'success') => {
+        setSnackbar({ open: true, message, severity });
+    };
+
+    const handleCloseSnackbar = (event, reason) => {
+        if (reason === 'clickaway') return;
+        setSnackbar(prev => ({ ...prev, open: false }));
+    };
+
+    // Mutations
+    const invalidateAndRefetch = () => {
+        queryClient.invalidateQueries(['rme-work-orders']);
+        queryClient.invalidateQueries(['rme-deleted-work-orders']);
+    };
+
+    const bulkSoftDeleteMutation = useMutation({
+        mutationFn: async (ids) => {
+            const promises = Array.from(ids).map(id =>
+                axiosInstance.patch(`/work-orders-today/${id}/`, {
+                    is_deleted: true,
+                    deleted_by: currentUser.name,
+                    deleted_by_email: currentUser.email,
+                    deleted_date: getCurrentPacificTimeISO(),
+                })
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+            showSnackbar('Items moved to recycle bin', 'success');
+        },
+        onError: (err) => {
+            showSnackbar(err?.response?.data?.message || 'Delete failed', 'error');
+        },
+    });
+
+    const permanentDeleteFromRecycleBinMutation = useMutation({
+        mutationFn: async (id) => {
+            const response = await axiosInstance.delete(`/work-orders-today/${id}/`);
+            return response.data;
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+            setSelectedRecycleBinItems(new Set());
+            setSingleDeleteDialogOpen(false);
+            setSelectedSingleItem(null);
+            showSnackbar('Item permanently deleted', 'success');
+        },
+        onError: (err) => {
+            console.error('Permanent delete error:', err);
+            showSnackbar(err?.response?.data?.message || 'Permanent delete failed', 'error');
+        },
+    });
+
+    const bulkPermanentDeleteMutation = useMutation({
+        mutationFn: async (ids) => {
+            const promises = ids.map(id =>
+                axiosInstance.delete(`/work-orders-today/${id}/`)
+            );
+            await Promise.all(promises);
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+            setSelectedRecycleBinItems(new Set());
+            setPermanentDeleteDialogOpen(false);
+            showSnackbar('Items permanently deleted', 'success');
+        },
+        onError: (err) => {
+            console.error('Bulk permanent delete error:', err);
+            showSnackbar(err?.response?.data?.message || 'Bulk permanent delete failed', 'error');
+        },
+    });
+
+    const restoreFromRecycleBinMutation = useMutation({
+        mutationFn: async (id) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                is_deleted: false,
+                deleted_date: null,
+                deleted_by: '',
+                deleted_by_email: '',
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+            setSelectedRecycleBinItems(new Set());
+            setSingleRestoreDialogOpen(false);
+            setSelectedSingleItem(null);
+            showSnackbar('Item restored successfully', 'success');
+        },
+        onError: (err) => {
+            console.error('Restore error:', err);
+            showSnackbar(err?.response?.data?.message || 'Restore failed', 'error');
+        },
+    });
+
+    const bulkRestoreMutation = useMutation({
+        mutationFn: async (ids) => {
+            const promises = ids.map(id =>
+                axiosInstance.patch(`/work-orders-today/${id}/`, {
+                    is_deleted: false,
+                    deleted_date: null,
+                    deleted_by: '',
+                    deleted_by_email: '',
+                })
+            );
+            return Promise.all(promises);
+        },
+        onSuccess: (responses) => {
+            invalidateAndRefetch();
+            setSelectedRecycleBinItems(new Set());
+            setRestoreDialogOpen(false);
+            showSnackbar(`${responses.length} item(s) restored`, 'success');
+        },
+        onError: (err) => {
+            console.error('Bulk restore error:', err);
+            showSnackbar(
+                err?.response?.data?.message || 'Bulk restore failed',
+                'error'
+            );
+        },
+    });
+
+    const lockReportMutation = useMutation({
+        mutationFn: async ({ id }) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                finalized_by: currentUser.name,
+                finalized_by_email: currentUser.email,
+                finalized_date: getCurrentPacificTimeISO(),
+                rme_completed: true,
+                report_id: `RME-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                tech_report_submitted: true,
+                status: 'LOCKED',
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+        },
+    });
+
+    const waitToLockMutation = useMutation({
+        mutationFn: async ({ id, reason, notes }) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                wait_to_lock: true,
+                reason: reason,
+                notes: notes,
+                moved_created_by: currentUser.name,
+                moved_to_holding_date: getCurrentPacificTimeISO(),
+                tech_report_submitted: true,
+                status: 'HOLDING',
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+        },
+    });
+
+    const deleteReportMutation = useMutation({
+        mutationFn: async ({ id }) => {
+            const response = await axiosInstance.patch(`/work-orders-today/${id}/`, {
+                finalized_by: currentUser.name,
+                finalized_by_email: currentUser.email,
+                finalized_date: getCurrentPacificTimeISO(),
+                rme_completed: true,
+                status: 'DELETED',
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            invalidateAndRefetch();
+        },
+    });
+
+    // Handle locked action with confirmation
+    const handleLockedClick = (id, section, itemData) => {
+        setLockedConfirmModal({
+            open: true,
+            itemId: id,
+            itemData: itemData,
+            section: section,
+        });
+    };
+
+    const confirmLockedAction = async () => {
+        const { itemId } = lockedConfirmModal;
+
+        try {
+            await lockReportMutation.mutateAsync({
+                id: itemId,
+            });
+
+            showSnackbar('Report locked successfully', 'success');
+        } catch (error) {
+            console.error('Error locking report:', error);
+            showSnackbar('Failed to lock report', 'error');
+        } finally {
+            setLockedConfirmModal({ open: false, itemId: null, itemData: null, section: null });
+        }
+    };
+
+    // Handle discard action with confirmation
+    const handleDiscardClick = (id, section, itemData) => {
+        setDiscardConfirmModal({
+            open: true,
+            itemId: id,
+            itemData: itemData,
+            section: section,
+        });
+    };
+
+    const confirmDiscardAction = async () => {
+        const { itemId } = discardConfirmModal;
+
+        try {
+            await deleteReportMutation.mutateAsync({ id: itemId });
+            showSnackbar('Report discarded successfully', 'success');
+        } catch (error) {
+            console.error('Error discarding report:', error);
+            showSnackbar('Failed to discard report', 'error');
+        } finally {
+            setDiscardConfirmModal({ open: false, itemId: null, itemData: null, section: null });
+        }
+    };
+
+    const handleWaitToLockToggle = (id) => {
+        const newSet = new Set(waitToLockAction);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+            const newDetails = { ...waitToLockDetails };
+            delete newDetails[id];
+            setWaitToLockDetails(newDetails);
+        } else {
+            newSet.add(id);
+            setWaitToLockDetails(prev => ({
+                ...prev,
+                [id]: { reason: '', notes: '' }
+            }));
+        }
+        setWaitToLockAction(newSet);
+    };
+
+    // Handle wait to lock details changes
+    const handleWaitToLockReasonChange = (id, reason) => {
+        setWaitToLockDetails(prev => ({
+            ...prev,
+            [id]: { ...prev[id], reason }
+        }));
+    };
+
+    const handleWaitToLockNotesChange = (id, notes) => {
+        setWaitToLockDetails(prev => ({
+            ...prev,
+            [id]: { ...prev[id], notes }
+        }));
+    };
+
+    // Pagination handlers
+    const handleChangePageReportNeeded = (event, newPage) => setPageReportNeeded(newPage);
+    const handleChangeRowsPerPageReportNeeded = (event) => {
+        setRowsPerPageReportNeeded(parseInt(event.target.value, 10));
+        setPageReportNeeded(0);
+    };
+
+    const handleChangePageReportSubmitted = (event, newPage) => setPageReportSubmitted(newPage);
+    const handleChangeRowsPerPageReportSubmitted = (event) => {
+        setRowsPerPageReportSubmitted(parseInt(event.target.value, 10));
+        setPageReportSubmitted(0);
+    };
+
+    const handleChangePageHolding = (event, newPage) => setPageHolding(newPage);
+    const handleChangeRowsPerPageHolding = (event) => {
+        setRowsPerPageHolding(parseInt(event.target.value, 10));
+        setPageHolding(0);
+    };
+
+    const handleChangePageFinalized = (event, newPage) => setPageFinalized(newPage);
+    const handleChangeRowsPerPageFinalized = (event) => {
+        setRowsPerPageFinalized(parseInt(event.target.value, 10));
+        setPageFinalized(0);
+    };
+
+    const handleChangeRecycleBinPage = (event, newPage) => setRecycleBinPage(newPage);
+    const handleChangeRecycleBinRowsPerPage = (event) => {
+        setRecycleBinRowsPerPage(parseInt(event.target.value, 10));
+        setRecycleBinPage(0);
+    };
+
+    // Selection toggle functions
+    const toggleSelection = (setState, id) => {
+        setState(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    };
+
+    const toggleAllSelection = (items, pageItems, selectedSet) => {
+        const allPageIds = new Set(pageItems.map(item => item.id));
+        const currentSelected = new Set(selectedSet);
+        const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
+
+        if (allSelectedOnPage) {
+            const newSet = new Set(currentSelected);
+            allPageIds.forEach(id => newSet.delete(id));
+            return newSet;
+        } else {
+            const newSet = new Set([...currentSelected, ...allPageIds]);
+            return newSet;
+        }
+    };
+
+    // Recycle Bin selection functions
+    const toggleRecycleBinSelection = (itemKey) => {
+        setSelectedRecycleBinItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(itemKey)) newSet.delete(itemKey);
+            else newSet.add(itemKey);
+            return newSet;
+        });
+    };
+
+    const toggleAllRecycleBinSelection = () => {
+        const currentPageItems = recycleBinPageItems;
+        const allPageIds = new Set(currentPageItems.map(item => item.id.toString()));
+        const currentSelected = new Set(selectedRecycleBinItems);
+        const allSelectedOnPage = Array.from(allPageIds).every(id => currentSelected.has(id));
+
+        if (allSelectedOnPage) {
+            const newSet = new Set(currentSelected);
+            allPageIds.forEach(id => newSet.delete(id));
+            setSelectedRecycleBinItems(newSet);
+        } else {
+            const newSet = new Set([...currentSelected, ...allPageIds]);
+            setSelectedRecycleBinItems(newSet);
+        }
+    };
+
+    // Action handlers
+    const handleSoftDelete = async (selectionSet, section) => {
+        if (selectionSet.size === 0) return;
+        setSelectedForDeletion(selectionSet);
+        setDeletionSection(section);
+        setDeleteDialogOpen(true);
+    };
+
+    const executeSoftDelete = async () => {
+        try {
+            await bulkSoftDeleteMutation.mutateAsync(selectedForDeletion);
+            setSelectedReportNeeded(new Set());
+            setSelectedReportSubmitted(new Set());
+            setSelectedHolding(new Set());
+            setSelectedFinalized(new Set());
+            setSelectedForDeletion(new Set());
+            setDeleteDialogOpen(false);
+        } catch (error) {
+            console.error('Delete error:', error);
+        }
+    };
+
+    const handlePermanentDelete = async (selectionSet) => {
+        if (selectionSet.size === 0) return;
+        setSelectedForPermanentDeletion(selectionSet);
+        setPermanentDeleteDialogOpen(true);
+    };
+
+    const executePermanentDelete = async () => {
+        try {
+            await bulkPermanentDeleteMutation.mutateAsync(Array.from(selectedForPermanentDeletion));
+            setSelectedRecycleBinItems(new Set());
+            setPermanentDeleteDialogOpen(false);
+            setSelectedForPermanentDeletion(new Set());
+        } catch (error) {
+            console.error('Permanent delete error:', error);
+        }
+    };
+
+    const handleRestore = async (selectionSet) => {
+        if (selectionSet.size === 0) return;
+        setSelectedForRestore(selectionSet);
+        setRestoreDialogOpen(true);
+    };
+
+    const executeRestore = async () => {
+        try {
+            await bulkRestoreMutation.mutateAsync(Array.from(selectedForRestore));
+            setSelectedRecycleBinItems(new Set());
+            setRestoreDialogOpen(false);
+            setSelectedForRestore(new Set());
+        } catch (error) {
+            console.error('Restore error:', error);
+        }
+    };
+
+    // Handle save changes for Report Submitted table (only for Wait to Lock)
+    const handleSaveReportSubmittedChanges = async () => {
+        const selectedItems = reportSubmittedPageItems.filter(item =>
+            waitToLockAction.has(item.id)
+        );
+
+        const actions = {
+            waitToLock: [],
+            invalidCombinations: []
+        };
+
+        selectedItems.forEach(item => {
+            const hasWaitToLock = waitToLockAction.has(item.id);
+            if (hasWaitToLock) {
+                const details = waitToLockDetails[item.id] || { reason: '', notes: '' };
+                if (details.reason) {
+                    actions.waitToLock.push({
+                        id: item.id,
+                        reason: details.reason,
+                        notes: details.notes,
+                        rawData: item.rawData,
+                    });
+                } else {
+                    actions.invalidCombinations.push({
+                        id: item.id,
+                        address: item.address,
+                        error: 'Missing reason for Wait to Lock'
+                    });
+                }
+            }
+        });
+
+        // Execute API calls for Wait to Lock
+        try {
+            let message = '';
+
+            // Process wait to lock
+            if (actions.waitToLock.length > 0) {
+                for (const action of actions.waitToLock) {
+                    await waitToLockMutation.mutateAsync({
+                        id: action.id,
+                        reason: action.reason,
+                        notes: action.notes,
+                    });
+                }
+                message += `${actions.waitToLock.length} report(s) moved to Holding. `;
+            }
+
+            // Show errors for invalid combinations
+            if (actions.invalidCombinations.length > 0) {
+                const invalidAddresses = actions.invalidCombinations.map(ic => ic.address).join(', ');
+                message += `${actions.invalidCombinations.length} report(s) have errors: ${invalidAddresses}.`;
+                showSnackbar(message, 'warning');
+            } else if (message) {
+                showSnackbar(message, 'success');
+            } else {
+                showSnackbar('No Wait to Lock changes to save', 'info');
+            }
+
+            // Clear checkboxes after processing
+            setWaitToLockAction(new Set());
+            setWaitToLockDetails({});
+
+        } catch (error) {
+            console.error('Save changes error:', error);
+            showSnackbar('Failed to save changes', 'error');
+        }
+    };
+
+    // Handle single item actions in recycle bin
+    const handleSingleRestore = (item) => {
+        setSelectedSingleItem(item);
+        setSingleRestoreDialogOpen(true);
+    };
+
+    const handleSinglePermanentDelete = (item) => {
+        setSelectedSingleItem(item);
+        setSingleDeleteDialogOpen(true);
+    };
+
+    const executeSingleRestore = () => {
+        if (selectedSingleItem) {
+            restoreFromRecycleBinMutation.mutate(selectedSingleItem.id);
+        }
+    };
+
+    const executeSinglePermanentDelete = () => {
+        if (selectedSingleItem) {
+            permanentDeleteFromRecycleBinMutation.mutate(selectedSingleItem.id);
+        }
+    };
+
+    // Paginated items
+    const reportNeededPageItems = filteredReportNeeded.slice(
+        pageReportNeeded * rowsPerPageReportNeeded,
+        pageReportNeeded * rowsPerPageReportNeeded + rowsPerPageReportNeeded
+    );
+
+    const reportSubmittedPageItems = filteredReportSubmitted.slice(
+        pageReportSubmitted * rowsPerPageReportSubmitted,
+        pageReportSubmitted * rowsPerPageReportSubmitted + rowsPerPageReportSubmitted
+    );
+
+    const holdingPageItems = filteredHoldingReports.slice(
+        pageHolding * rowsPerPageHolding,
+        pageHolding * rowsPerPageHolding + rowsPerPageHolding
+    );
+
+    const finalizedPageItems = filteredFinalizedReports.slice(
+        pageFinalized * rowsPerPageFinalized,
+        pageFinalized * rowsPerPageFinalized + rowsPerPageFinalized
+    );
+
+    const recycleBinPageItems = deletedWorkOrders.slice(
+        recycleBinPage * recycleBinRowsPerPage,
+        recycleBinPage * recycleBinRowsPerPage + recycleBinRowsPerPage
+    );
+
+    // Get current timezone offset for Pacific Time
+    const getCurrentPacificTimezoneOffset = () => {
+        return isDaylightSavingTime(new Date()) ? PACIFIC_DAYLIGHT_OFFSET : PACIFIC_TIMEZONE_OFFSET;
+    };
+
+    // Loading state
+    if (isLoading) {
+        return <DashboardLoader />;
+    }
+
+    return (
+        <Box>
+            <Helmet>
+                <title>RME Reports | Sterling Septic & Plumbing LLC</title>
+                <meta name="description" content="Super Admin RME Reports page" />
+            </Helmet>
+            
+            {/* Header */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box>
+                    <Typography
+                        sx={{
+                            fontWeight: 600,
+                            mb: 0.5,
+                            fontSize: '0.95rem',
+                            color: TEXT_COLOR,
+                            letterSpacing: '-0.01em',
+                        }}
+                    >
+                        RME Report Tracking
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: GRAY_COLOR,
+                            fontSize: '0.8rem',
+                            fontWeight: 400,
+                        }}
+                    >
+                        Track RME reports through 4 stages
+                    </Typography>
+                </Box>
+                <Button
+                    variant="outlined"
+                    startIcon={<History size={16} />}
+                    onClick={() => setRecycleBinModalOpen(true)}
+                    sx={{
+                        textTransform: 'none',
+                        fontSize: isMobile ? '0.75rem' : '0.85rem',
+                        fontWeight: 500,
+                        color: PURPLE_COLOR,
+                        borderColor: alpha(PURPLE_COLOR, 0.3),
+                        '&:hover': {
+                            borderColor: PURPLE_COLOR,
+                            backgroundColor: alpha(PURPLE_COLOR, 0.05),
+                        },
+                    }}
+                >
+                    {isMobile ? `Bin (${deletedWorkOrders.length})` : `Recycle Bin (${deletedWorkOrders.length})`}
+                </Button>
+            </Box>
+
+            {/* Stage 1: Report Needed Reports */}
+            <Section
+                title="Stage 1: Report Needed"
+                color={BLUE_COLOR}
+                count={filteredReportNeeded.length}
+                selectedCount={selectedReportNeeded.size}
+                additionalActions={
+                    <Box sx={{
+                        display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
+                        gap: 1,
+                        width: isMobile ? '100%' : 'auto',
+                        mt: isMobile ? 1 : 0
+                    }}>
+                        <SearchInput
+                            value={searchReportNeeded}
+                            onChange={setSearchReportNeeded}
+                            placeholder="Search report needed..."
+                            fullWidth={isMobile}
+                        />
+                        {isMobile && selectedReportNeeded.size > 0 && (
+                            <OutlineButton
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                startIcon={<Trash2 size={10} />}
+                                onClick={() => handleSoftDelete(selectedReportNeeded, 'Report Needed')}
+                            >
+                                Move to Bin ({selectedReportNeeded.size})
+                            </OutlineButton>
+                        )}
+                    </Box>
+                }
+                showDeleteButton={!isMobile && selectedReportNeeded.size > 0}
+                onDeleteAction={() => handleSoftDelete(selectedReportNeeded, 'Report Needed')}
+                isMobile={isMobile}
+            >
+                <ReportNeededTable
+                    items={reportNeededPageItems}
+                    selected={selectedReportNeeded}
+                    onToggleSelect={(id) => toggleSelection(setSelectedReportNeeded, id)}
+                    onToggleAll={() => setSelectedReportNeeded(toggleAllSelection(filteredReportNeeded, reportNeededPageItems, selectedReportNeeded))}
+                    color={BLUE_COLOR}
+                    totalCount={filteredReportNeeded.length}
+                    page={pageReportNeeded}
+                    rowsPerPage={rowsPerPageReportNeeded}
+                    onPageChange={handleChangePageReportNeeded}
+                    onRowsPerPageChange={handleChangeRowsPerPageReportNeeded}
+                    onViewPDF={handleViewPDF}
+                    isMobile={isMobile}
+                />
+            </Section>
+
+            {/* Stage 2: Report Submitted */}
+            <Section
+                title="Stage 2: Report Submitted"
+                color={CYAN_COLOR}
+                count={filteredReportSubmitted.length}
+                selectedCount={selectedReportSubmitted.size}
+                additionalActions={
+                    <Box sx={{
+                        display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
+                        gap: 1,
+                        width: isMobile ? '100%' : 'auto',
+                        mt: isMobile ? 1 : 0
+                    }}>
+                        <SearchInput
+                            value={searchReportSubmitted}
+                            onChange={setSearchReportSubmitted}
+                            placeholder="Search report submitted..."
+                            fullWidth={isMobile}
+                        />
+                        {isMobile && (
+                            <Box sx={{
+                                gap: 1,
+                                width: '100%'
+                            }}>
+                                {selectedReportSubmitted.size > 0 && (
+                                    <Button
+                                        variant="outlined"
+                                        color="error"
+                                        size="small"
+                                        onClick={() => handleSoftDelete(selectedReportSubmitted, 'Report Submitted')}
+                                        startIcon={<Trash2 size={14} />}
+                                        sx={{
+                                            textTransform: 'none',
+                                            fontSize: '0.75rem',
+                                            height: '30px',
+                                            flex: 1,
+                                        }}
+                                    >
+                                        Bin ({selectedReportSubmitted.size})
+                                    </Button>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
+                }
+                showDeleteButton={!isMobile && selectedReportSubmitted.size > 0}
+                onDeleteAction={() => handleSoftDelete(selectedReportSubmitted, 'Report Submitted')}
+                isMobile={isMobile}
+            >
+                <ReportSubmittedTable
+                    items={reportSubmittedPageItems}
+                    selected={selectedReportSubmitted}
+                    onToggleSelect={(id) => toggleSelection(setSelectedReportSubmitted, id)}
+                    onToggleAll={() => setSelectedReportSubmitted(toggleAllSelection(filteredReportSubmitted, reportSubmittedPageItems, selectedReportSubmitted))}
+                    onLockedClick={(id, itemData) => handleLockedClick(id, 'reportSubmitted', itemData)}
+                    waitToLockAction={waitToLockAction}
+                    onWaitToLockToggle={handleWaitToLockToggle}
+                    onDiscardClick={(id, itemData) => handleDiscardClick(id, 'reportSubmitted', itemData)}
+                    waitToLockDetails={waitToLockDetails}
+                    onWaitToLockReasonChange={handleWaitToLockReasonChange}
+                    onWaitToLockNotesChange={handleWaitToLockNotesChange}
+                    onSaveChanges={handleSaveReportSubmittedChanges}
+                    waitToLockActionSize={waitToLockAction.size}
+                    onEditClick={handleEditClick}
+                    color={CYAN_COLOR}
+                    totalCount={filteredReportSubmitted.length}
+                    page={pageReportSubmitted}
+                    rowsPerPage={rowsPerPageReportSubmitted}
+                    onPageChange={handleChangePageReportSubmitted}
+                    onRowsPerPageChange={handleChangeRowsPerPageReportSubmitted}
+                    onViewPDF={handleViewPDF}
+                    isMobile={isMobile}
+                />
+            </Section>
+
+            {/* Stage 3: Holding Reports */}
+            <Section
+                title="Stage 3: Holding"
+                color={ORANGE_COLOR}
+                count={filteredHoldingReports.length}
+                selectedCount={selectedHolding.size}
+                additionalActions={
+                    <Box sx={{
+                        display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
+                        gap: 1,
+                        width: isMobile ? '100%' : 'auto',
+                        mt: isMobile ? 1 : 0
+                    }}>
+                        <SearchInput
+                            value={searchHolding}
+                            onChange={setSearchHolding}
+                            placeholder="Search holding..."
+                            fullWidth={isMobile}
+                        />
+                        {isMobile && selectedHolding.size > 0 && (
+                            <OutlineButton
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                onClick={() => handleSoftDelete(selectedHolding, 'Holding')}
+                                startIcon={<Trash2 size={14} />}
+                            >
+                                Move to Bin ({selectedHolding.size})
+                            </OutlineButton>
+                        )}
+                    </Box>
+                }
+                showDeleteButton={!isMobile && selectedHolding.size > 0}
+                onDeleteAction={() => handleSoftDelete(selectedHolding, 'Holding')}
+                isMobile={isMobile}
+            >
+                <HoldingTable
+                    items={holdingPageItems}
+                    selected={selectedHolding}
+                    onToggleSelect={(id) => toggleSelection(setSelectedHolding, id)}
+                    onToggleAll={() => setSelectedHolding(toggleAllSelection(filteredHoldingReports, holdingPageItems, selectedHolding))}
+                    onLockedClick={(id, itemData) => handleLockedClick(id, 'holding', itemData)}
+                    onDiscardClick={(id, itemData) => handleDiscardClick(id, 'holding', itemData)}
+                    onEditClick={handleEditClick}
+                    color={ORANGE_COLOR}
+                    totalCount={filteredHoldingReports.length}
+                    page={pageHolding}
+                    rowsPerPage={rowsPerPageHolding}
+                    onPageChange={handleChangePageHolding}
+                    onRowsPerPageChange={handleChangeRowsPerPageHolding}
+                    onViewPDF={handleViewPDF}
+                    isMobile={isMobile}
+                />
+            </Section>
+
+            {/* Stage 4: Finalized Reports */}
+            <Section
+                title="Stage 4: Finalized"
+                color={GREEN_COLOR}
+                count={filteredFinalizedReports.length}
+                selectedCount={selectedFinalized.size}
+                additionalActions={
+                    <Box sx={{
+                        display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
+                        gap: 1,
+                        width: isMobile ? '100%' : 'auto',
+                        mt: isMobile ? 1 : 0
+                    }}>
+                        <SearchInput
+                            value={searchFinalized}
+                            onChange={setSearchFinalized}
+                            placeholder="Search finalized..."
+                            fullWidth={isMobile}
+                        />
+                        {isMobile && selectedFinalized.size > 0 && (
+                            <OutlineButton
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                onClick={() => handleSoftDelete(selectedFinalized, 'Finalized')}
+                                startIcon={<Trash2 size={14} />}
+                            >
+                                Move to Bin ({selectedFinalized.size})
+                            </OutlineButton>
+                        )}
+                    </Box>
+                }
+                showDeleteButton={!isMobile && selectedFinalized.size > 0}
+                onDeleteAction={() => handleSoftDelete(selectedFinalized, 'Finalized')}
+                isMobile={isMobile}
+            >
+                <FinalizedTable
+                    items={finalizedPageItems}
+                    selected={selectedFinalized}
+                    onToggleSelect={(id) => toggleSelection(setSelectedFinalized, id)}
+                    onToggleAll={() => setSelectedFinalized(toggleAllSelection(filteredFinalizedReports, finalizedPageItems, selectedFinalized))}
+                    color={GREEN_COLOR}
+                    totalCount={filteredFinalizedReports.length}
+                    page={pageFinalized}
+                    rowsPerPage={rowsPerPageFinalized}
+                    onPageChange={handleChangePageFinalized}
+                    onRowsPerPageChange={handleChangeRowsPerPageFinalized}
+                    isMobile={isMobile}
+                />
+            </Section>
+
+            {/* PDF Viewer Modal */}
+            <PDFViewerModal
+                open={pdfViewerOpen}
+                onClose={() => setPdfViewerOpen(false)}
+                pdfUrl={currentPdfUrl}
+            />
+
+            {/* Edit Form Modal */}
+            <EditFormModal
+                open={editFormModalOpen}
+                onClose={() => setEditFormModalOpen(false)}
+                workOrderData={selectedWorkOrder}
+                onSave={handleSaveForm}
+                showSnackbar={showSnackbar}
+            />
+
+            {/* Recycle Bin Modal */}
+            <RmeRecycleBinModal
+                open={recycleBinModalOpen}
+                onClose={() => setRecycleBinModalOpen(false)}
+                recycleBinItems={deletedWorkOrders}
+                isRecycleBinLoading={false}
+                recycleBinSearch={recycleBinSearch}
+                setRecycleBinSearch={setRecycleBinSearch}
+                recycleBinPage={recycleBinPage}
+                recycleBinRowsPerPage={recycleBinRowsPerPage}
+                handleChangeRecycleBinPage={handleChangeRecycleBinPage}
+                handleChangeRecycleBinRowsPerPage={handleChangeRecycleBinRowsPerPage}
+                selectedRecycleBinItems={selectedRecycleBinItems}
+                toggleRecycleBinSelection={toggleRecycleBinSelection}
+                toggleAllRecycleBinSelection={toggleAllRecycleBinSelection}
+                confirmBulkRestore={() => handleRestore(selectedRecycleBinItems)}
+                confirmBulkPermanentDelete={() => handlePermanentDelete(selectedRecycleBinItems)}
+                handleSingleRestore={handleSingleRestore}
+                handleSinglePermanentDelete={handleSinglePermanentDelete}
+                restoreFromRecycleBinMutation={restoreFromRecycleBinMutation}
+                permanentDeleteFromRecycleBinMutation={permanentDeleteFromRecycleBinMutation}
+                bulkRestoreMutation={bulkRestoreMutation}
+                bulkPermanentDeleteMutation={bulkPermanentDeleteMutation}
+                itemType="work-order"
+                timezoneOffset={getCurrentPacificTimezoneOffset()}
+                isMobile={isMobile}
+                isSmallMobile={isSmallMobile}
+            />
+
+            {/* Move to Recycle Bin Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(ORANGE_COLOR, 0.1),
+                            color: ORANGE_COLOR,
+                        }}>
+                            <Trash2 size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Move to Recycle Bin
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Items can be restored from recycle bin
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to move <strong>{selectedForDeletion.size} item(s)</strong> from the <strong>{deletionSection}</strong> section to recycle bin?
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(ORANGE_COLOR, 0.05),
+                        border: `1px solid ${alpha(ORANGE_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertCircle size={18} color={ORANGE_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: ORANGE_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Note
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Items moved to recycle bin can be restored later. Permanent deletion is only available in the recycle bin.
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setDeleteDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={executeSoftDelete}
+                        variant="contained"
+                        color="warning"
+                        startIcon={<Trash2 size={16} />}
+                        disabled={bulkSoftDeleteMutation.isPending}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: ORANGE_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(ORANGE_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        {bulkSoftDeleteMutation.isPending ? 'Moving...' : 'Move to Recycle Bin'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Restore Dialog */}
+            <Dialog
+                open={restoreDialogOpen}
+                onClose={() => setRestoreDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(GREEN_COLOR, 0.1),
+                            color: GREEN_COLOR,
+                        }}>
+                            <RotateCcw size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Restore Items
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Restore items from recycle bin
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to restore <strong>{selectedForRestore.size} item(s)</strong> from recycle bin?
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(GREEN_COLOR, 0.05),
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertCircle size={18} color={GREEN_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: GREEN_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Note
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Restored items will be moved back to the Report Needed stage.
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setRestoreDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={executeRestore}
+                        variant="contained"
+                        color="success"
+                        startIcon={<RotateCcw size={16} />}
+                        disabled={bulkRestoreMutation.isPending}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: GREEN_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        {bulkRestoreMutation.isPending ? 'Restoring...' : 'Restore Items'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Permanent Delete Dialog */}
+            <Dialog
+                open={permanentDeleteDialogOpen}
+                onClose={() => setPermanentDeleteDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(RED_COLOR, 0.1),
+                            color: RED_COLOR,
+                        }}>
+                            <Trash2 size={18} />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Permanent Delete
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Permanently delete items from recycle bin
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to permanently delete <strong>{selectedForPermanentDeletion.size} item(s)</strong> from recycle bin?
+                    </Typography>
+                    <Box sx={{
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: alpha(RED_COLOR, 0.05),
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1.5,
+                    }}>
+                        <AlertTriangle size={18} color={RED_COLOR} />
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: RED_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                Warning: This action cannot be undone
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                Items will be permanently deleted and cannot be recovered.
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setPermanentDeleteDialogOpen(false)}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={executePermanentDelete}
+                        variant="contained"
+                        color="error"
+                        startIcon={<Trash2 size={16} />}
+                        disabled={bulkPermanentDeleteMutation.isPending}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: RED_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(RED_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        {bulkPermanentDeleteMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Single Restore Dialog */}
+            <Dialog
+                open={singleRestoreDialogOpen}
+                onClose={() => setSingleRestoreDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                    }
+                }}
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <RotateCcw size={20} color={GREEN_COLOR} />
+                        <Typography variant="h6" sx={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                            Restore Item
+                        </Typography>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        Are you sure you want to restore work order <strong>{selectedSingleItem?.wo_number}</strong>?
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => {
+                            setSingleRestoreDialogOpen(false);
+                            setSelectedSingleItem(null);
+                        }}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="success"
+                        onClick={executeSingleRestore}
+                        disabled={restoreFromRecycleBinMutation.isPending}
+                        startIcon={<RotateCcw size={16} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: GREEN_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        {restoreFromRecycleBinMutation.isPending ? 'Restoring...' : 'Restore'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Single Delete Dialog */}
+            <Dialog
+                open={singleDeleteDialogOpen}
+                onClose={() => setSingleDeleteDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                    }
+                }}
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Trash2 size={20} color={RED_COLOR} />
+                        <Typography variant="h6" sx={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                            Permanent Delete
+                        </Typography>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        Are you sure you want to permanently delete work order <strong>{selectedSingleItem?.wo_number}</strong>?
+                        This action cannot be undone.
+                    </Typography>
+                    <Alert severity="warning" icon={<AlertTriangle size={20} />}>
+                        Item will be permanently removed and cannot be recovered.
+                    </Alert>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => {
+                        setSingleDeleteDialogOpen(false);
+                        setSelectedSingleItem(null);
+                    }}
+                        variant='outlined'
+                        color='error'
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        onClick={executeSinglePermanentDelete}
+                        disabled={permanentDeleteFromRecycleBinMutation.isPending}
+                        startIcon={<Trash2 size={16} />}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                        }}
+                    >
+                        {permanentDeleteFromRecycleBinMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Locked Confirmation Modal */}
+            <Dialog
+                open={lockedConfirmModal.open}
+                onClose={() => setLockedConfirmModal({ ...lockedConfirmModal, open: false })}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(GREEN_COLOR, 0.1),
+                            color: GREEN_COLOR,
+                        }}>
+                            <img
+                                src={locked}
+                                alt="locked"
+                                style={{
+                                    width: '18px',
+                                    height: '18px',
+                                }}
+                            />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Confirm Lock Action
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Lock report and move to Finalized
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to lock this report and move it to Finalized?
+                    </Typography>
+                    {lockedConfirmModal.itemData && (
+                        <Box sx={{
+                            p: 1.5,
+                            borderRadius: '6px',
+                            backgroundColor: alpha(GREEN_COLOR, 0.05),
+                            border: `1px solid ${alpha(GREEN_COLOR, 0.1)}`,
+                            mb: 2,
+                        }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                {lockedConfirmModal.itemData.street}
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                {lockedConfirmModal.itemData.city}, {lockedConfirmModal.itemData.state} {lockedConfirmModal.itemData.zip}
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setLockedConfirmModal({ ...lockedConfirmModal, open: false })}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={confirmLockedAction}
+                        variant="contained"
+                        color="success"
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: GREEN_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(GREEN_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        Lock Report
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Discard Confirmation Modal */}
+            <Dialog
+                open={discardConfirmModal.open}
+                onClose={() => setDiscardConfirmModal({ ...discardConfirmModal, open: false })}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'white',
+                        borderRadius: '6px',
+                        border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    }
+                }}
+            >
+                <DialogTitle sx={{
+                    borderBottom: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                    pb: 1.5,
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: alpha(RED_COLOR, 0.1),
+                            color: RED_COLOR,
+                        }}>
+                            <img
+                                src={discard}
+                                alt="discard"
+                                style={{
+                                    width: '18px',
+                                    height: '18px',
+                                }}
+                            />
+                        </Box>
+                        <Box>
+                            <Typography variant="h6" sx={{
+                                color: TEXT_COLOR,
+                                fontSize: '0.95rem',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                            }}>
+                                Confirm Discard Action
+                            </Typography>
+                            <Typography variant="caption" sx={{
+                                color: GRAY_COLOR,
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                            }}>
+                                Discard report and move to Finalized as "DELETED"
+                            </Typography>
+                        </Box>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            mb: 2,
+                        }}
+                    >
+                        Are you sure you want to discard this report and mark it as "DELETED"?
+                    </Typography>
+                    {discardConfirmModal.itemData && (
+                        <Box sx={{
+                            p: 1.5,
+                            borderRadius: '6px',
+                            backgroundColor: alpha(RED_COLOR, 0.05),
+                            border: `1px solid ${alpha(RED_COLOR, 0.1)}`,
+                            mb: 2,
+                        }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: TEXT_COLOR,
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    mb: 0.5,
+                                }}
+                            >
+                                {discardConfirmModal.itemData.street}
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: GRAY_COLOR,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 400,
+                                }}
+                            >
+                                {discardConfirmModal.itemData.city}, {discardConfirmModal.itemData.state} {discardConfirmModal.itemData.zip}
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 1.5 }}>
+                    <Button
+                        onClick={() => setDiscardConfirmModal({ ...discardConfirmModal, open: false })}
+                        sx={{
+                            textTransform: 'none',
+                            color: TEXT_COLOR,
+                            fontSize: '0.85rem',
+                            fontWeight: 400,
+                            px: 2,
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={confirmDiscardAction}
+                        variant="contained"
+                        color="error"
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            px: 2,
+                            bgcolor: RED_COLOR,
+                            boxShadow: 'none',
+                            '&:hover': {
+                                bgcolor: alpha(RED_COLOR, 0.9),
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        Discard Report
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Snackbar */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={handleCloseSnackbar}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert
+                    onClose={handleCloseSnackbar}
+                    severity={snackbar.severity}
+                    iconMapping={{
+                        success: <CheckCircle size={20} />,
+                        error: <AlertCircle size={20} />,
+                        warning: <AlertTriangle size={20} />,
+                        info: <AlertCircle size={20} />,
+                    }}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '6px',
+                        backgroundColor: snackbar.severity === 'success'
+                            ? alpha(GREEN_COLOR, 0.05)
+                            : snackbar.severity === 'error'
+                                ? alpha(RED_COLOR, 0.05)
+                                : snackbar.severity === 'warning'
+                                    ? alpha(ORANGE_COLOR, 0.05)
+                                    : alpha(BLUE_COLOR, 0.05),
+                        borderLeft: `4px solid ${snackbar.severity === 'success' ? GREEN_COLOR :
+                            snackbar.severity === 'error' ? RED_COLOR :
+                                snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR}`,
+                        '& .MuiAlert-icon': {
+                            color: snackbar.severity === 'success' ? GREEN_COLOR :
+                                snackbar.severity === 'error' ? RED_COLOR :
+                                    snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR,
+                        },
+                        '& .MuiAlert-message': {
+                            py: 0.5,
+                        }
+                    }}
+                    elevation={6}
+                >
+                    <Typography
+                        sx={{
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            color: TEXT_COLOR,
+                        }}
+                    >
+                        {snackbar.message}
+                    </Typography>
+                </Alert>
+            </Snackbar>
+        </Box>
     );
 };
 

@@ -28,6 +28,9 @@ import {
     useMediaQuery,
     useTheme,
     CircularProgress,
+    RadioGroup,
+    FormControlLabel,
+    Radio,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
@@ -308,6 +311,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
     const [formData, setFormData] = useState({});
     const [formStructure, setFormStructure] = useState([]);
     const [error, setError] = useState(null);
+    const [yesNoFields, setYesNoFields] = useState({});
 
     // Fetch form structure from server when modal opens
     useEffect(() => {
@@ -318,6 +322,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
             setError(null);
             try {
                 const response = await axiosInstance.get(`/work-order-edit/${workOrderData.id}/`);
+                console.log('Fetched form data:', response.data);
                 
                 let serverData = response.data;
                 
@@ -359,14 +364,50 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                 
                 setFormStructure(validatedFields);
                 
+                // Initialize form data and yes/no field tracking
                 const initialData = {};
+                const initialYesNoFields = {};
+                
                 validatedFields.forEach(field => {
                     if (field.type === 'select' || field.type === 'text' || field.type === 'textarea') {
                         initialData[field.name] = field.value || '';
                     }
+                    
+                    // Check if this is a Yes/No/N/A field (filter out empty string options)
+                    const cleanOptions = field.options ? field.options.filter(opt => opt !== '' && opt !== null && opt !== undefined) : [];
+                    
+                    // Check for Yes/No/N/A options
+                    const isYesNoField = field.type === 'select' && 
+                        cleanOptions.length <= 3 && 
+                        cleanOptions.every(opt => {
+                            const optStr = opt.toString().toUpperCase();
+                            return optStr === 'YES' || 
+                                   optStr === 'NO' ||
+                                   optStr === 'N/A' ||
+                                   optStr === 'NA';
+                        });
+                    
+                    // Check for inspection status options
+                    const isInspectionField = field.type === 'select' && 
+                        cleanOptions.length === 3 &&
+                        cleanOptions.includes('Fully Inspected') &&
+                        cleanOptions.includes('Partially Inspected') &&
+                        cleanOptions.includes('Not Inspected');
+                    
+                    if (isYesNoField) {
+                        initialYesNoFields[field.name] = {
+                            isYesNo: true,
+                            showConditional: false
+                        };
+                    } else if (isInspectionField) {
+                        initialYesNoFields[field.name] = {
+                            isInspection: true
+                        };
+                    }
                 });
                 
                 setFormData(initialData);
+                setYesNoFields(initialYesNoFields);
                 
             } catch (error) {
                 console.error('Error fetching form data:', error);
@@ -381,6 +422,32 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
             fetchFormData();
         }
     }, [workOrderData, open]);
+
+    // Update yes/no field visibility when form data changes
+    useEffect(() => {
+        const updatedYesNoFields = { ...yesNoFields };
+        let hasChanges = false;
+
+        Object.keys(yesNoFields).forEach(fieldName => {
+            const fieldInfo = yesNoFields[fieldName];
+            const fieldValue = formData[fieldName] || '';
+            
+            if (fieldInfo.isYesNo) {
+                // Show conditional comment field when "NO" or "N/A" is selected
+                const shouldShowConditional = fieldValue.toString().toUpperCase() === 'NO' || 
+                                             fieldValue.toString().toUpperCase() === 'N/A';
+                
+                if (updatedYesNoFields[fieldName].showConditional !== shouldShowConditional) {
+                    updatedYesNoFields[fieldName].showConditional = shouldShowConditional;
+                    hasChanges = true;
+                }
+            }
+        });
+
+        if (hasChanges) {
+            setYesNoFields(updatedYesNoFields);
+        }
+    }, [formData]);
 
     const handleInputChange = (fieldName, value) => {
         setFormData(prev => ({
@@ -401,45 +468,93 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                 updated_by: workOrderData.currentUser?.name || 'System',
                 updated_at: new Date().toISOString(),
             };
-            console.log(payload);
+            console.log('Saving form data:', payload);
+            
+            // TODO: Uncomment when ready to save
             // const response = await axiosInstance.patch(`/work-order-edit/${workOrderData.id}/`, payload);
             
             // if (onSave) {
             //     onSave(formData, response.data);
             // }
             
-            // if (showSnackbar) {
-            //     showSnackbar('Form saved successfully', 'success');
-            // }
+            // For now, simulate success
+            showSnackbar('Form saved successfully (simulated)', 'success');
             
-            // setError(null);
+            // Close modal after a delay
+            setTimeout(() => {
+                setSaveLoading(false);
+                onClose();
+            }, 1500);
+            
         } catch (error) {
             console.error('Error saving form:', error);
             setError(error.response?.data?.message || 'Failed to save form');
             if (showSnackbar) {
                 showSnackbar('Failed to save form', 'error');
             }
-        } finally {
             setSaveLoading(false);
+        }
+    };
+
+    // Get background color based on inspection status
+    const getInspectionRowColor = (value) => {
+        switch(value) {
+            case 'Fully Inspected':
+                return alpha(GREEN_COLOR, 0.08); // Light green
+            case 'Partially Inspected':
+                return alpha(ORANGE_COLOR, 0.08); // Light orange
+            case 'Not Inspected':
+                return alpha(RED_COLOR, 0.08); // Light red
+            default:
+                return 'transparent';
+        }
+    };
+
+    // Get text color based on inspection status
+    const getInspectionTextColor = (value) => {
+        switch(value) {
+            case 'Fully Inspected':
+                return GREEN_COLOR;
+            case 'Partially Inspected':
+                return ORANGE_COLOR;
+            case 'Not Inspected':
+                return RED_COLOR;
+            default:
+                return TEXT_COLOR;
         }
     };
 
     const renderFormField = (field, index) => {
         const uniqueKey = `${field.name}-${index}`;
         const value = formData[field.name] || '';
+        
+        // Filter out empty options
+        const cleanOptions = field.options ? field.options.filter(opt => opt !== '' && opt !== null && opt !== undefined) : [];
+        
+        // Check field types
+        const isYesNoField = field.type === 'select' && 
+            yesNoFields[field.name]?.isYesNo;
+        
+        const isInspectionField = field.type === 'select' && 
+            yesNoFields[field.name]?.isInspection;
+        
+        // Check if we should show conditional comment field for Yes/No fields
+        const showConditionalComment = isYesNoField && 
+            yesNoFields[field.name]?.showConditional;
 
-        switch (field.type) {
-            case 'select':
-                return (
-                    <TableRow key={uniqueKey}>
+        // Set row background color for inspection fields
+        const rowBgColor = isInspectionField ? getInspectionRowColor(value) : alpha(BLUE_COLOR, 0.02);
+
+        if (isYesNoField) {
+            return (
+                <React.Fragment key={uniqueKey}>
+                    <TableRow sx={{ backgroundColor: rowBgColor }}>
                         <TableCell sx={{
-                            py: 2,
-                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '30%',
+                            borderBottom: showConditionalComment ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            width: isMobile ? '40%' : '70%',
                             fontWeight: 600,
                             fontSize: '0.85rem',
                             color: TEXT_COLOR,
-                            bgcolor: alpha(BLUE_COLOR, 0.02),
                             verticalAlign: 'top',
                         }}>
                             {field.label}
@@ -450,7 +565,187 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                             )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 2,
+                            borderBottom: showConditionalComment ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                        }}>
+                            <RadioGroup
+                                row
+                                name={field.name}
+                                value={value}
+                                onChange={(e) => handleInputChange(field.name, e.target.value)}
+                                sx={{ gap: isMobile ? 1 : 2 }}
+                            >
+                                {cleanOptions.map((option, optionIndex) => (
+                                    <FormControlLabel
+                                        key={`${option}-${optionIndex}`}
+                                        value={option}
+                                        control={<Radio size="small" />}
+                                        label={
+                                            <Typography sx={{ 
+                                                fontSize: '0.85rem',
+                                                textTransform: 'uppercase'
+                                            }}>
+                                                {option}
+                                            </Typography>
+                                        }
+                                        disabled={isLoading || saveLoading}
+                                        sx={{
+                                            marginRight: isMobile ? 1 : 2,
+                                            '& .MuiFormControlLabel-label': {
+                                                fontSize: '0.85rem',
+                                            }
+                                        }}
+                                    />
+                                ))}
+                            </RadioGroup>
+                            {field.required && !value && (
+                                <Typography variant="caption" sx={{ color: RED_COLOR, display: 'block', mt: 0.5 }}>
+                                    This field is required
+                                </Typography>
+                            )}
+                        </TableCell>
+                    </TableRow>
+
+                    {/* Show comment field when "NO" or "N/A" is selected */}
+                    {showConditionalComment && (
+                        <TableRow sx={{ backgroundColor: alpha(BLUE_COLOR, 0.01) }}>
+                            <TableCell sx={{
+                                borderBottom: `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                                width: isMobile ? '40%' : '70%',
+                                fontWeight: 600,
+                                fontSize: '0.85rem',
+                                color: TEXT_COLOR,
+                                verticalAlign: 'top',
+                            }}>
+                                Explanation (required for NO/N/A):
+                                <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                    *
+                                </Typography>
+                            </TableCell>
+                            <TableCell sx={{
+                                borderBottom: `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            }}>
+                                <StyledTextField
+                                    value={formData[`${field.name}_comment`] || ''}
+                                    onChange={(e) => handleInputChange(`${field.name}_comment`, e.target.value)}
+                                    fullWidth
+                                    multiline
+                                    rows={3}
+                                    size="small"
+                                    disabled={isLoading || saveLoading}
+                                    placeholder={`Please explain why ${field.label.toLowerCase()}...`}
+                                    error={!formData[`${field.name}_comment`]}
+                                    sx={{
+                                        '& .MuiInputBase-input': {
+                                            fontSize: '0.85rem',
+                                            lineHeight: 1.5,
+                                        }
+                                    }}
+                                />
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </React.Fragment>
+            );
+        }
+
+        if (isInspectionField) {
+            return (
+                <TableRow 
+                    key={uniqueKey}
+                    sx={{ 
+                        backgroundColor: getInspectionRowColor(value),
+                        '&:hover': {
+                            backgroundColor: alpha(getInspectionTextColor(value), 0.12),
+                        }
+                    }}
+                >
+                    <TableCell sx={{
+                        borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                        width: isMobile ? '40%' : '70%',
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        color: TEXT_COLOR,
+                        verticalAlign: 'top',
+                    }}>
+                        {field.label}
+                        {field.required && (
+                            <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                *
+                            </Typography>
+                        )}
+                    </TableCell>
+                    <TableCell sx={{
+                        borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                    }}>
+                        <FormControl fullWidth size="small">
+                            <StyledSelect
+                                value={value}
+                                onChange={(e) => {
+                                    handleInputChange(field.name, e.target.value);
+                                }}
+                                displayEmpty
+                                disabled={isLoading || saveLoading}
+                                error={field.required && !value}
+                                sx={{
+                                    '& .MuiSelect-select': {
+                                        fontSize: '0.85rem',
+                                        padding: '8px 12px',
+                                        borderColor: getInspectionTextColor(value) || "#1976d2",
+                                        color: getInspectionTextColor(value) || 'inherit',
+                                        fontWeight: value ? 600 : 400,
+                                    },
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: getInspectionTextColor(value) || undefined,
+                                    }
+                                }}
+                            >
+                                {cleanOptions.map((option, optionIndex) => {
+                                    let optionColor = TEXT_COLOR;
+                                    if (option === 'Fully Inspected') optionColor = GREEN_COLOR;
+                                    if (option === 'Partially Inspected') optionColor = ORANGE_COLOR;
+                                    if (option === 'Not Inspected') optionColor = RED_COLOR;
+                                    
+                                    return (
+                                        <MenuItem 
+                                            key={`${option}-${optionIndex}`} 
+                                            value={option}
+                                            sx={{ 
+                                                fontSize: '0.85rem',
+                                                color: optionColor,
+                                                fontWeight: 500,
+                                            }}
+                                        >
+                                            {option}
+                                        </MenuItem>
+                                    );
+                                })}
+                            </StyledSelect>
+                        </FormControl>
+                    </TableCell>
+                </TableRow>
+            );
+        }
+
+        switch (field.type) {
+            case 'select':
+                return (
+                    <TableRow key={uniqueKey} sx={{ backgroundColor: rowBgColor }}>
+                        <TableCell sx={{
+                            borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
+                            width: isMobile ? '40%' : '70%',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            color: TEXT_COLOR,
+                            verticalAlign: 'top',
+                        }}>
+                            {field.label}
+                            {field.required && (
+                                <Typography component="span" sx={{ color: RED_COLOR, ml: 0.5 }}>
+                                    *
+                                </Typography>
+                            )}
+                        </TableCell>
+                        <TableCell sx={{
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <FormControl fullWidth size="small">
@@ -471,7 +766,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                                     <MenuItem value="">
                                         <em>Select {field.label}</em>
                                     </MenuItem>
-                                    {field.options && field.options.map((option, optionIndex) => (
+                                    {cleanOptions.map((option, optionIndex) => (
                                         <MenuItem 
                                             key={`${option}-${optionIndex}`} 
                                             value={option}
@@ -488,15 +783,13 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
 
             case 'text':
                 return (
-                    <TableRow key={uniqueKey}>
+                    <TableRow key={uniqueKey} sx={{ backgroundColor: rowBgColor }}>
                         <TableCell sx={{
-                            py: 2,
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '30%',
+                            width: isMobile ? '40%' : '70%',
                             fontWeight: 600,
                             fontSize: '0.85rem',
                             color: TEXT_COLOR,
-                            bgcolor: alpha(BLUE_COLOR, 0.02),
                             verticalAlign: 'top',
                         }}>
                             {field.label}
@@ -507,7 +800,6 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                             )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 2,
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <StyledTextField
@@ -531,15 +823,13 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
 
             case 'textarea':
                 return (
-                    <TableRow key={uniqueKey}>
+                    <TableRow key={uniqueKey} sx={{ backgroundColor: rowBgColor }}>
                         <TableCell sx={{
-                            py: 2,
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '30%',
+                            width: isMobile ? '40%' : '70%',
                             fontWeight: 600,
                             fontSize: '0.85rem',
                             color: TEXT_COLOR,
-                            bgcolor: alpha(BLUE_COLOR, 0.02),
                             verticalAlign: 'top',
                         }}>
                             {field.label}
@@ -550,7 +840,6 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                             )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 2,
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <StyledTextField
@@ -576,15 +865,13 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
 
             default:
                 return (
-                    <TableRow key={uniqueKey}>
+                    <TableRow key={uniqueKey} sx={{ backgroundColor: rowBgColor }}>
                         <TableCell sx={{
-                            py: 2,
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
-                            width: isMobile ? '40%' : '30%',
+                            width: isMobile ? '40%' : '70%',
                             fontWeight: 600,
                             fontSize: '0.85rem',
                             color: TEXT_COLOR,
-                            bgcolor: alpha(BLUE_COLOR, 0.02),
                             verticalAlign: 'top',
                         }}>
                             {field.label}
@@ -595,7 +882,6 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                             )}
                         </TableCell>
                         <TableCell sx={{
-                            py: 2,
                             borderBottom: index === formStructure.length - 1 ? 'none' : `1px solid ${alpha(GRAY_COLOR, 0.1)}`,
                         }}>
                             <Typography variant="body2" sx={{ color: GRAY_COLOR, fontStyle: 'italic' }}>
@@ -784,7 +1070,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                                                 fontWeight: 600,
                                                 fontSize: '0.9rem',
                                                 color: TEXT_COLOR,
-                                                width: isMobile ? '40%' : '30%',
+                                                width: isMobile ? '40%' : '70%',
                                             }}>
                                                 Field Name
                                             </TableCell>
@@ -3165,7 +3451,7 @@ const RMEReports = () => {
                 <title>RME Reports | Sterling Septic & Plumbing LLC</title>
                 <meta name="description" content="Super Admin RME Reports page" />
             </Helmet>
-            
+
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>

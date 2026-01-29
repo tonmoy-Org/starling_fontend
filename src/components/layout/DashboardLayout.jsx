@@ -13,7 +13,6 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import Avatar from '@mui/material/Avatar';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import InputBase from '@mui/material/InputBase';
 import Badge from '@mui/material/Badge';
 import SwipeableDrawer from '@mui/material/SwipeableDrawer';
 import { useAuth } from '../../auth/AuthProvider';
@@ -22,6 +21,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import NotificationDrawer from '../Notification/NotificationDrawer';
 import ProfileDialog from '../ProfileDialog';
 import NestedMenuItem from '../NestedMenuItem';
+import SearchBar from '../SearchBar'
 import logo from '../../assets/logos/logo.png';
 import miniLogo from '../../assets/logos/mini_logo.png';
 import DashboardFooter from '../DashboardFooter';
@@ -30,7 +30,6 @@ import {
   LogOut,
   User,
   Menu as MenuIcon,
-  Search,
   Bell,
   ChevronLeft,
   ChevronRight,
@@ -170,92 +169,6 @@ const ScrollableBox = styled(Box)({
   msOverflowStyle: 'none',
   scrollbarWidth: 'none',
 });
-
-const SearchContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  backgroundColor: alpha('#ffffff', 0.1),
-  border: `1px solid ${alpha('#ffffff', 0.3)}`,
-  borderRadius: '5px',
-  padding: '2px 10px',
-  transition: 'all 0.2s ease',
-  '&:hover': {
-    borderColor: alpha(colors.primary, 0.5),
-    backgroundColor: alpha('#ffffff', 0.15),
-  },
-  '&:focus-within': {
-    borderColor: colors.primary,
-    backgroundColor: alpha('#ffffff', 0.15),
-    boxShadow: `0 0 0 2px ${alpha(colors.primary, 0.1)}`,
-  },
-  [theme.breakpoints.down('md')]: {
-    position: 'fixed',
-    top: 60,
-    left: 16,
-    right: 16,
-    zIndex: theme.zIndex.appBar + 1,
-    width: 'calc(100% - 32px)',
-    backgroundColor: alpha('#ffffff', 0.95),
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-    borderColor: colors.primary,
-    '&:hover, &:focus-within': {
-      borderColor: colors.primary,
-      backgroundColor: alpha('#ffffff', 0.95),
-    },
-  },
-}));
-
-const SearchInput = styled(InputBase)(({ theme }) => ({
-  color: colors.textPrimary,
-  fontSize: '0.8rem',
-  width: '100%',
-  '& .MuiInputBase-input': {
-    padding: '6px 0 6px 6px',
-    fontSize: '0.8rem',
-    '&::placeholder': {
-      color: alpha(colors.textPrimary, 0.7),
-      opacity: 1,
-      fontSize: '0.8rem',
-    },
-  },
-  [theme.breakpoints.down('md')]: {
-    '& .MuiInputBase-input::placeholder': {
-      fontSize: '0.85rem',
-    },
-  },
-}));
-
-const MobileSearchBackdrop = styled(Box)(({ theme }) => ({
-  display: 'none',
-  [theme.breakpoints.down('md')]: {
-    display: 'block',
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: theme.zIndex.appBar + 2,
-    backdropFilter: 'blur(2px)',
-  },
-}));
-
-const MobileSearchButton = styled(IconButton)(({ theme }) => ({
-  display: 'none',
-  [theme.breakpoints.down('md')]: {
-    display: 'flex',
-    color: colors.textPrimary,
-    backgroundColor: alpha('#ffffff', 0.1),
-    borderRadius: '5px',
-    border: `1px solid ${alpha('#ffffff', 0.3)}`,
-    width: 32,
-    height: 32,
-    '&:hover': {
-      backgroundColor: alpha('#ffffff', 0.2),
-      color: colors.primary,
-    },
-  },
-}));
 
 const MobileActionsContainer = styled(Box)(({ theme }) => ({
   [theme.breakpoints.up('md')]: {
@@ -400,6 +313,7 @@ const DashboardLayout = ({ children, title, menuItems }) => {
   const [menuAnchorEl, setMenuAnchorEl] = React.useState(null);
   const [profileDialogOpen, setProfileDialogOpen] = React.useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
+  const [searchValue, setSearchValue] = React.useState('');
   const [expandedItems, setExpandedItems] = React.useState(new Set());
 
   React.useEffect(() => {
@@ -568,6 +482,12 @@ const DashboardLayout = ({ children, title, menuItems }) => {
     setMobileSearchOpen(false);
   };
 
+  const handleSearchChange = (value) => {
+    setSearchValue(value);
+    // You can add search functionality here
+    console.log('Search value:', value);
+  };
+
   const handleExpandToggle = (itemText) => {
     setExpandedItems(prev => {
       const newSet = new Set(prev);
@@ -709,10 +629,6 @@ const DashboardLayout = ({ children, title, menuItems }) => {
     <Box sx={{ display: 'flex', minHeight: '100vh', overflow: 'hidden' }}>
       <CssBaseline />
 
-      {mobileSearchOpen && (
-        <MobileSearchBackdrop onClick={handleMobileSearchClose} />
-      )}
-
       <AppBar
         position="fixed"
         open={open && !isMobile}
@@ -848,13 +764,15 @@ const DashboardLayout = ({ children, title, menuItems }) => {
           </Box>
 
           <DesktopActionsContainer>
-            <SearchContainer sx={{ width: '280px' }}>
-              <Search size={16} color={alpha(colors.textPrimary, 0.7)} />
-              <SearchInput
-                placeholder="Search"
-                inputProps={{ 'aria-label': 'search' }}
-              />
-            </SearchContainer>
+            {/* Use the SearchBar component */}
+            <SearchBar
+              mobileSearchOpen={mobileSearchOpen}
+              onMobileSearchToggle={toggleMobileSearch}
+              onMobileSearchClose={handleMobileSearchClose}
+              searchValue={searchValue}
+              onSearchChange={handleSearchChange}
+              placeholder="Search pages..."
+            />
 
             <IconButton
               onClick={toggleNotificationDrawer(true)}
@@ -1001,9 +919,15 @@ const DashboardLayout = ({ children, title, menuItems }) => {
           </DesktopActionsContainer>
 
           <MobileActionsContainer>
-            <MobileSearchButton onClick={toggleMobileSearch}>
-              <Search size={16} />
-            </MobileSearchButton>
+            {/* Use the SearchBar component in mobile container */}
+            <SearchBar
+              mobileSearchOpen={mobileSearchOpen}
+              onMobileSearchToggle={toggleMobileSearch}
+              onMobileSearchClose={handleMobileSearchClose}
+              searchValue={searchValue}
+              onSearchChange={handleSearchChange}
+              placeholder="Search pages..."
+            />
 
             <IconButton
               onClick={toggleNotificationDrawer(true)}
@@ -1152,62 +1076,6 @@ const DashboardLayout = ({ children, title, menuItems }) => {
           </MobileActionsContainer>
         </Toolbar>
       </AppBar>
-
-      {mobileSearchOpen && (
-        <Box sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: theme.zIndex.appBar + 4,
-          backgroundColor: colors.appBarBg,
-          backdropFilter: 'blur(10px)',
-          borderBottom: `1px solid ${alpha('#ffffff', 0.2)}`,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          animation: 'slideDown 0.2s ease-out',
-          '@keyframes slideDown': {
-            from: {
-              transform: 'translateY(-100%)',
-            },
-            to: {
-              transform: 'translateY(0)',
-            },
-          },
-        }}>
-          <Box sx={{
-            p: 2,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-          }}>
-            <SearchContainer sx={{ flex: 1 }}>
-              <Search size={16} color={alpha(colors.textPrimary, 0.7)} />
-              <SearchInput
-                placeholder="Search everything..."
-                inputProps={{ 'aria-label': 'search' }}
-                autoFocus
-              />
-            </SearchContainer>
-            <IconButton
-              onClick={handleMobileSearchClose}
-              sx={{
-                color: colors.textPrimary,
-                backgroundColor: alpha('#ffffff', 0.1),
-                borderRadius: '5px',
-                border: `1px solid ${alpha('#ffffff', 0.3)}`,
-                width: 32,
-                height: 32,
-                '&:hover': {
-                  backgroundColor: alpha('#ffffff', 0.2),
-                  color: colors.primary,
-                },
-              }}
-            >
-              <X size={16} />
-            </IconButton>
-          </Box>
-        </Box>
-      )}
 
       {isMobile ? (
         <MuiDrawer

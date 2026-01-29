@@ -4,11 +4,8 @@ import axiosInstance from '../api/axios';
 
 const formatDate = (dateString) => {
     if (!dateString) return null;
-    try {
-        return new Date(dateString);
-    } catch {
-        return null;
-    }
+    const date = new Date(dateString);
+    return isNaN(date.getTime()) ? null : date;
 };
 
 export const useNotifications = () => {
@@ -17,35 +14,25 @@ export const useNotifications = () => {
     const { data, isLoading, error, refetch } = useQuery({
         queryKey: ['notifications-count', user?.role],
         queryFn: async () => {
-            if (!user) {
-                return {
-                    locates: [],
-                    workOrders: [],
-                    latestNotifications: [],
-                    count: 0,
-                    totalActualCount: 0,
-                    locatesCount: 0,
-                    workOrdersCount: 0,
-                    unseenLocateIds: [],
-                    unseenRmeIds: [],
-                    unseenIds: [],
-                };
-            }
+            // Default empty response
+            const emptyResponse = {
+                locates: [],
+                workOrders: [],
+                latestNotifications: [],
+                locatesCount: 0,
+                workOrdersCount: 0,
+                totalActualCount: 0,
+                unseenLocateIds: [],
+                unseenRmeIds: [],
+                unseenIds: [],
+                count: 0,
+            };
+
+            if (!user) return emptyResponse;
 
             const role = user.role?.toUpperCase();
             if (role !== 'SUPERADMIN' && role !== 'MANAGER') {
-                return {
-                    locates: [],
-                    workOrders: [],
-                    latestNotifications: [],
-                    count: 0,
-                    totalActualCount: 0,
-                    locatesCount: 0,
-                    workOrdersCount: 0,
-                    unseenLocateIds: [],
-                    unseenRmeIds: [],
-                    unseenIds: [],
-                };
+                return emptyResponse;
             }
 
             const [locatesResponse, workOrdersResponse] = await Promise.all([
@@ -71,48 +58,47 @@ export const useNotifications = () => {
             const unseenLocateIds = [];
             const unseenRmeIds = [];
 
-            locatesData.forEach(locate => {
+            // ---- LOCATES ----
+            locatesData.forEach((locate) => {
                 const createdDate = formatDate(
                     locate.created_at || locate.created_date
                 );
                 if (!createdDate) return;
 
-                if (createdDate >= oneMonthAgo && !locate.is_seen) {
+                if (createdDate >= oneMonthAgo && locate.is_seen === false) {
                     locatesCount++;
 
                     const id = `locate-${locate.id}`;
                     unseenLocateIds.push(id);
 
-                    if (latestNotifications.length < 10) {
-                        latestNotifications.push({
-                            id,
-                            type: 'locate',
-                            timestamp: createdDate,
-                        });
-                    }
+                    latestNotifications.push({
+                        id,
+                        type: 'locate',
+                        timestamp: createdDate,
+                    });
                 }
             });
 
-            workOrdersData.forEach(workOrder => {
+            // ---- WORK ORDERS / RME ----
+            workOrdersData.forEach((workOrder) => {
                 const elapsedDate = formatDate(workOrder.elapsed_time);
                 if (!elapsedDate) return;
 
-                if (elapsedDate >= oneMonthAgo && !workOrder.is_seen) {
+                if (elapsedDate >= oneMonthAgo && workOrder.is_seen === false) {
                     workOrdersCount++;
 
                     const id = `rme-${workOrder.id}`;
                     unseenRmeIds.push(id);
 
-                    if (latestNotifications.length < 10) {
-                        latestNotifications.push({
-                            id,
-                            type: 'RME',
-                            timestamp: elapsedDate,
-                        });
-                    }
+                    latestNotifications.push({
+                        id,
+                        type: 'RME',
+                        timestamp: elapsedDate,
+                    });
                 }
             });
 
+            // Sort by latest
             latestNotifications.sort((a, b) => b.timestamp - a.timestamp);
 
             const unseenIds = [...unseenLocateIds, ...unseenRmeIds];
@@ -121,14 +107,14 @@ export const useNotifications = () => {
             return {
                 locates: locatesData,
                 workOrders: workOrdersData,
-                latestNotifications: latestNotifications.slice(0, 10),
+                latestNotifications,
                 locatesCount,
                 workOrdersCount,
                 totalActualCount,
                 unseenLocateIds,
                 unseenRmeIds,
                 unseenIds,
-                count: Math.min(totalActualCount, 10),
+                count: totalActualCount,
             };
         },
         staleTime: 30000,

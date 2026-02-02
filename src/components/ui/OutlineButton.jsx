@@ -5,6 +5,7 @@ const OutlineButton = styled(Button)(({ theme }) => ({
     color: '#dc2626',
     borderRadius: '5px',
     padding: '6px 16px',
+    height: '34px',
     fontWeight: 500,
     textTransform: 'none',
     fontSize: '13px',

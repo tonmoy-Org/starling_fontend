@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     TableContainer,
     Table,
@@ -15,16 +15,20 @@ import {
     FormControl,
     InputLabel,
     MenuItem,
-    Button
+    Button,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { Timer, FileSpreadsheet, Save } from 'lucide-react';
 import StyledTextField from '../../../../../../components/ui/StyledTextField';
 import StyledSelect from '../../../../../../components/ui/StyledSelect';
+import UpdateSepticDialog from '../modals/UpdateDialog';
+
 import reportIcon from '../../../../../../assets/icons/report.gif';
 import penIcon from '../../../../../../assets/icons/Edit.gif';
 import lockedIcon from '../../../../../../assets/icons/locked.gif';
 import discardIcon from '../../../../../../assets/icons/btnDel.gif';
+import updateIonIcon from '../../../../../../assets/icons/operations.png';
+
 import {
     WAIT_TO_LOCK_REASONS,
     BLUE_COLOR,
@@ -58,8 +62,27 @@ const ReportSubmittedTable = ({
     onViewPDF,
     isMobile,
 }) => {
+    const [septicDialogOpen, setSepticDialogOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
+
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
+
+    const handleUpdateClick = (item) => {
+        setSelectedItem(item);
+        setSepticDialogOpen(true);
+    };
+
+    const handleUpdateSubmit = (itemId, data) => {
+        console.log('Septic components submitted for item:', itemId, 'with data:', data);
+        // Add your API call or state update logic here
+        // You might want to update parent component state or make an API call
+    };
+
+    const handleUpdateClose = () => {
+        setSepticDialogOpen(false);
+        setSelectedItem(null);
+    };
 
     return (
         <>
@@ -76,7 +99,7 @@ const ReportSubmittedTable = ({
                     borderRadius: '4px',
                 },
             }}>
-                <Table size="small" sx={{ minWidth: isMobile ? 1300 : 'auto' }}>
+                <Table size="small" sx={{ minWidth: isMobile ? 1400 : 'auto' }}>
                     <TableHead>
                         <TableRow sx={{
                             bgcolor: alpha(color, 0.04),
@@ -129,6 +152,9 @@ const ReportSubmittedTable = ({
                                 Edit
                             </TableCell>
                             <TableCell align="center" sx={{ minWidth: 80 }}>
+                                Septic Components
+                            </TableCell>
+                            <TableCell align="center" sx={{ minWidth: 80 }}>
                                 {isMobile ? 'Lock' : 'LOCKED'}
                             </TableCell>
                             <TableCell align="center" sx={{ minWidth: 100 }}>
@@ -142,7 +168,7 @@ const ReportSubmittedTable = ({
                     <TableBody>
                         {items.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                                <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                                     <Box sx={{
                                         display: 'flex',
                                         flexDirection: 'column',
@@ -311,6 +337,29 @@ const ReportSubmittedTable = ({
                                                     </IconButton>
                                                 </Tooltip>
                                             </TableCell>
+                                            <TableCell align="center" sx={{ py: 1 }}>
+                                                <Tooltip title="Update Septic Components & System Information">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleUpdateClick(item)}
+                                                        sx={{
+                                                            color: BLUE_COLOR,
+                                                            '&:hover': {
+                                                                backgroundColor: alpha(BLUE_COLOR, 0.1),
+                                                            },
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={updateIonIcon}
+                                                            alt="update"
+                                                            style={{
+                                                                width: '20px',
+                                                                height: '20px',
+                                                            }}
+                                                        />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </TableCell>
                                             <TableCell align="center" sx={{ py: 1.5 }}>
                                                 <Tooltip title="Click to lock this report">
                                                     <IconButton
@@ -379,7 +428,7 @@ const ReportSubmittedTable = ({
 
                                         {isWaitToLock && (
                                             <TableRow sx={{ bgcolor: alpha(CYAN_COLOR, 0.05) }}>
-                                                <TableCell colSpan={9} sx={{ p: 2 }}>
+                                                <TableCell colSpan={10} sx={{ p: 2 }}>
                                                     <Box sx={{ pl: 6 }}>
                                                         <Typography variant="caption" sx={{
                                                             fontWeight: 600,
@@ -495,7 +544,15 @@ const ReportSubmittedTable = ({
                         }}
                     />
                 )}
-            </TableContainer >
+            </TableContainer>
+
+            {/* Septic Components Dialog */}
+            <UpdateSepticDialog
+                open={septicDialogOpen}
+                onClose={handleUpdateClose}
+                item={selectedItem}
+                onSubmit={handleUpdateSubmit}
+            />
         </>
     );
 };

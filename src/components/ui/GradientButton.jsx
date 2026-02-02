@@ -4,6 +4,7 @@ const GradientButton = styled(Button)(({ theme }) => ({
     background: 'linear-gradient(135deg, #1565C0 0%, #1976D2 100%)',
     color: 'white',
     padding: '6px 16px',
+    height: '34px',
     fontWeight: 500,
     fontSize: '0.85rem',
     textTransform: 'none',

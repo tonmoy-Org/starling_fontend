@@ -29,7 +29,6 @@ import axiosInstance from '../../../../../../api/axios';
 import StyledTextField from '../../../../../../components/ui/StyledTextField';
 import StyledSelect from '../../../../../../components/ui/StyledSelect';
 import OutlineButton from '../../../../../../components/ui/OutlineButton';
-import GradientButton from '../../../../../../components/ui/GradientButton';
 import DashboardLoader from '../../../../../../components/Loader/DashboardLoader';
 import FormNotFoundModal from './FormNotFoundModal';
 import {
@@ -40,6 +39,7 @@ import {
     ORANGE_COLOR,
     RED_COLOR,
 } from '../../utils/constants';
+import UpdateButton from '../../../../../../components/ui/UpdateButton';
 
 const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar, onMoveToRecycleBin }) => {
     const theme = useTheme();
@@ -884,7 +884,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar, onM
                     >
                         Cancel
                     </OutlineButton>
-                    <GradientButton
+                    <UpdateButton
                         onClick={handleSubmit}
                         variant="contained"
                         color="primary"
@@ -893,7 +893,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar, onM
                         sx={{ minWidth: 150, fontSize: '0.85rem' }}
                     >
                         {saveLoading ? 'Saving...' : 'Save Changes'}
-                    </GradientButton>
+                    </UpdateButton>
                 </DialogActions>
             </Dialog>
 

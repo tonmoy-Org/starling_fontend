@@ -26,6 +26,7 @@ import {
 import OutlineButton from '../../../../../../components/ui/OutlineButton';
 import septic_components from '../../data/septic_components.json';
 import StyledTextField from '../../../../../../components/ui/StyledTextField';
+import UpdateButton from '../../../../../../components/ui/UpdateButton';
 
 const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
     const [formData, setFormData] = useState({
@@ -350,7 +351,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                 }}>
                     <Box sx={{ mb: isMobile ? 1 : 1.5 }}>
                         <Typography variant="body2" sx={{
-                            mb: 0.5,
+                            mb: 1,
                             fontWeight: 500,
                             fontSize: bodyFontSize
                         }}>
@@ -365,7 +366,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                                 sx={{
                                     '& .MuiSelect-select': {
                                         fontSize: inputFontSize,
-                                        py: isMobile ? 0.75 : 1,
+
                                     }
                                 }}
                             >
@@ -390,7 +391,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
 
                     <Box sx={{ mb: isMobile ? 1 : 1.5 }}>
                         <Typography variant="body2" sx={{
-                            mb: 0.5,
+                            mb: 1,
                             fontWeight: 500,
                             fontSize: bodyFontSize
                         }}>
@@ -406,7 +407,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                                 sx={{
                                     '& .MuiSelect-select': {
                                         fontSize: inputFontSize,
-                                        py: isMobile ? 0.75 : 1,
+
                                     }
                                 }}
                             >
@@ -431,7 +432,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
 
                     <Box sx={{ mb: isMobile ? 1 : 1.5 }}>
                         <Typography variant="body2" sx={{
-                            mb: 0.5,
+                            mb: 1,
                             fontWeight: 500,
                             fontSize: bodyFontSize
                         }}>
@@ -447,7 +448,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                                 sx={{
                                     '& .MuiSelect-select': {
                                         fontSize: inputFontSize,
-                                        py: isMobile ? 0.75 : 1,
+
                                     }
                                 }}
                             >
@@ -472,7 +473,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
 
                     <Box sx={{ mb: isMobile ? 1 : 1.5 }}>
                         <Typography variant="body2" sx={{
-                            mb: 0.5,
+                            mb: 1,
                             fontWeight: 500,
                             fontSize: bodyFontSize
                         }}>
@@ -488,7 +489,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                                 sx={{
                                     '& .MuiSelect-select': {
                                         fontSize: inputFontSize,
-                                        py: isMobile ? 0.75 : 1,
+
                                     }
                                 }}
                             >
@@ -513,7 +514,7 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
 
                     <Box sx={{ mb: 0.5 }}>
                         <Typography variant="body2" sx={{
-                            mb: 0.5,
+                            mb: 1,
                             fontWeight: 500,
                             fontSize: bodyFontSize
                         }}>
@@ -528,7 +529,6 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                             InputProps={{
                                 sx: {
                                     fontSize: inputFontSize,
-                                    py: isMobile ? 0.75 : 1,
                                 }
                             }}
                         />
@@ -561,26 +561,15 @@ const UpdateDialog = ({ open, onClose, item, onSubmit }) => {
                 >
                     Cancel
                 </OutlineButton>
-                <Button
+                <UpdateButton
                     variant="contained"
                     onClick={handleSubmit}
                     color="warning"
                     size="small"
                     startIcon={<Save size={isMobile ? 12 : 14} />}
-                    sx={{
-                        textTransform: 'none',
-                        fontSize: buttonFontSize,
-                        height: isMobile ? '32px' : '32px',
-                        minWidth: isMobile ? 'calc(50% - 4px)' : 'auto',
-                        flex: isMobile ? 1 : 'none',
-                        bgcolor: ORANGE_COLOR,
-                        '&:hover': {
-                            bgcolor: alpha(ORANGE_COLOR, 0.9),
-                        },
-                    }}
                 >
                     Update Component
-                </Button>
+                </UpdateButton>
             </DialogActions>
         </Dialog>
     );

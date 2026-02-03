@@ -37,6 +37,7 @@ import {
     ORANGE_COLOR,
     CYAN_COLOR
 } from '../../utils/constants';
+import UpdateButton from '../../../../../../components/ui/UpdateButton';
 
 const ReportSubmittedTable = ({
     items,
@@ -484,25 +485,16 @@ const ReportSubmittedTable = ({
                                                                     }
                                                                 }}
                                                             />
-                                                            <Button
+                                                            <UpdateButton
                                                                 variant="contained"
                                                                 color="warning"
                                                                 size="small"
                                                                 onClick={onSaveChanges}
                                                                 disabled={waitToLockActionSize === 0}
                                                                 startIcon={<Save size={14} />}
-                                                                sx={{
-                                                                    textTransform: 'none',
-                                                                    fontSize: '0.85rem',
-                                                                    height: '36px',
-                                                                    bgcolor: ORANGE_COLOR,
-                                                                    '&:hover': {
-                                                                        bgcolor: alpha(ORANGE_COLOR, 0.9),
-                                                                    },
-                                                                }}
                                                             >
                                                                 Save Wait to Lock
-                                                            </Button>
+                                                            </UpdateButton>
                                                         </Box>
                                                     </Box>
                                                 </TableCell>

@@ -17,8 +17,8 @@ const StyledSelect = styled(Select)(({ theme }) => ({
     },
 
     '& .MuiSelect-select': {
-        fontSize: '0.9rem',
-        padding: '8px 12px',
+        fontSize: '0.8rem',
+        padding: '6px 12px',
     },
 }));
 

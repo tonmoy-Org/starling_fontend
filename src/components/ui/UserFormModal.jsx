@@ -7,8 +7,6 @@ import {
     DialogActions,
     Box,
     Typography,
-    FormControlLabel,
-    Switch,
     MenuItem,
 } from '@mui/material';
 import {
@@ -32,10 +30,11 @@ export const UserFormModal = ({
     selectedUser,
     formData,
     onInputChange,
-    onSwitchChange,
     isLoading,
     title = "User",
     color = GREEN_COLOR,
+    disableRoleChange = false,
+    warningText,
 }) => {
     const isCreating = !selectedUser;
     const buttonText = selectedUser ? `Update ${title}` : `Create ${title}`;
@@ -68,7 +67,7 @@ export const UserFormModal = ({
                     )}
                     <Typography
                         sx={{
-                            fontSize: '0.95rem',
+                            fontSize: '0.85rem',
                             color: TEXT_COLOR,
                             fontWeight: 600,
                         }}
@@ -78,12 +77,36 @@ export const UserFormModal = ({
                 </Box>
             </DialogTitle>
             <DialogContent sx={{ p: 2.5 }}>
+                {warningText && (
+                    <Box sx={{
+                        mb: 2,
+                        p: 1.5,
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                    }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                fontSize: '0.85rem',
+                                color: '#f59e0b',
+                                fontWeight: 500,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                            }}
+                        >
+                            ⚠️ {warningText}
+                        </Typography>
+                    </Box>
+                )}
+
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Name */}
                     <Box>
                         <Typography
                             variant="body2"
-                            sx={{ mb: 1, fontSize: '0.8rem', fontWeight: 500, color: TEXT_COLOR }}
+                            sx={{ mb: 1, fontSize: '0.85rem', fontWeight: 500, color: TEXT_COLOR }}
                         >
                             Name
                         </Typography>
@@ -103,7 +126,7 @@ export const UserFormModal = ({
                     <Box>
                         <Typography
                             variant="body2"
-                            sx={{ mb: 1, fontSize: '0.8rem', fontWeight: 500, color: TEXT_COLOR }}
+                            sx={{ mb: 1, fontSize: '0.85rem', fontWeight: 500, color: TEXT_COLOR }}
                         >
                             Email
                         </Typography>
@@ -124,7 +147,7 @@ export const UserFormModal = ({
                     <Box>
                         <Typography
                             variant="body2"
-                            sx={{ mb: 1, fontSize: '0.8rem', fontWeight: 500, color: TEXT_COLOR }}
+                            sx={{ mb: 1, fontSize: '0.85rem', fontWeight: 500, color: TEXT_COLOR }}
                         >
                             Password
                         </Typography>
@@ -150,7 +173,7 @@ export const UserFormModal = ({
                         <Box>
                             <Typography
                                 variant="body2"
-                                sx={{ mb: 1, fontSize: '0.8rem', fontWeight: 500, color: TEXT_COLOR }}
+                                sx={{ mb: 1, fontSize: '0.85rem', fontWeight: 500, color: TEXT_COLOR }}
                             >
                                 Role
                             </Typography>
@@ -162,46 +185,25 @@ export const UserFormModal = ({
                                 fullWidth
                                 variant="outlined"
                                 size="small"
+                                disabled={disableRoleChange}
                             >
-                                <MenuItem value="manager">Manager</MenuItem>
-                                <MenuItem value="superadmin">Super Admin</MenuItem>
-                                <MenuItem value="tech">Tech</MenuItem>
+                                <MenuItem sx={{ fontSize: '0.85rem', fontWeight: 500 }} value="manager">Manager</MenuItem>
+                                <MenuItem sx={{ fontSize: '0.85rem', fontWeight: 500 }} value="superadmin">Super Admin</MenuItem>
+                                <MenuItem sx={{ fontSize: '0.85rem', fontWeight: 500 }} value="tech">Tech</MenuItem>
                             </StyledSelect>
-                        </Box>
-                    )}
-
-                    {/* Active Switch - Only show when editing */}
-                    {selectedUser && (
-                        <Box>
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={formData.isActive}
-                                        onChange={onSwitchChange}
-                                        size="small"
-                                        sx={{
-                                            '& .MuiSwitch-switchBase.Mui-checked': {
-                                                color: color,
-                                            },
-                                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                                backgroundColor: color,
-                                            },
-                                        }}
-                                    />
-                                }
-                                label={
-                                    <Typography
-                                        variant="body2"
-                                        sx={{
-                                            fontSize: '0.85rem',
-                                            fontWeight: 500,
-                                            color: TEXT_COLOR,
-                                        }}
-                                    >
-                                        {formData.isActive ? 'Active' : 'Inactive'}
-                                    </Typography>
-                                }
-                            />
+                            {disableRoleChange && (
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        mt: 0.5,
+                                        fontSize: '0.85rem',
+                                        color: '#6b7280',
+                                        fontStyle: 'italic',
+                                    }}
+                                >
+                                    Role cannot be changed for your own account
+                                </Typography>
+                            )}
                         </Box>
                     )}
                 </Box>
@@ -210,6 +212,7 @@ export const UserFormModal = ({
                 <OutlineButton
                     onClick={onClose}
                     startIcon={<X size={16} />}
+                    sx={{ fontSize: '0.85rem' }}
                 >
                     Cancel
                 </OutlineButton>
@@ -223,6 +226,7 @@ export const UserFormModal = ({
                         (!selectedUser && !formData.password)
                     }
                     startIcon={selectedUser ? <Edit size={16} /> : <UserPlus size={16} />}
+                    sx={{ fontSize: '0.85rem' }}
                 >
                     {isSubmitting ? (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

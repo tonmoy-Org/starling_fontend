@@ -1,10 +1,13 @@
-// UserManagement.jsx (Using DataTable)
 import React, { useState } from 'react';
 import {
     Box,
     Typography,
     Tooltip,
     IconButton,
+    Snackbar,
+    Alert,
+    useTheme,
+    useMediaQuery,
 } from '@mui/material';
 import { Helmet } from 'react-helmet-async';
 import {
@@ -14,6 +17,9 @@ import {
     UserCheck,
     UserX,
     Mail,
+    CheckCircle,
+    AlertCircle,
+    AlertTriangle,
 } from 'lucide-react';
 import GradientButton from '../../../components/ui/GradientButton';
 import DashboardLoader from '../../../components/Loader/DashboardLoader';
@@ -21,24 +27,28 @@ import { useUsers } from '../../../hook/useUsers';
 import { UserFormModal } from '../../../components/ui/UserFormModal';
 import { DeleteConfirmationModal } from '../../../components/ui/DeleteConfirmationModal';
 import { StatusToggleModal } from '../../../components/ui/StatusToggleModal';
-import { NotificationSnackbar } from '../../../components/ui/NotificationSnackbar';
 import { DataTable } from '../../../components/DataTable/DataTable';
 import { useAuth } from '../../../auth/AuthProvider';
 
-// Define color constants
 const TEXT_COLOR = '#0F1115';
 const BLUE_COLOR = '#1976d2';
 const GREEN_COLOR = '#10b981';
 const RED_COLOR = '#ef4444';
+const ORANGE_COLOR = '#f59e0b';
 const GRAY_COLOR = '#6b7280';
 
 export const UserManagement = () => {
-    const [success, setSuccess] = useState('');
-    const [error, setError] = useState('');
-    const { user: isSuperAdmin } = useAuth();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const { user: currentUser } = useAuth();
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success',
+    });
+    const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
     const {
-        // Data
         users,
         isLoading,
         filteredUsers,
@@ -54,8 +64,6 @@ export const UserManagement = () => {
         openDeleteDialog,
         openStatusDialog,
         formData,
-
-        // Handlers
         handleChangePage,
         handleChangeRowsPerPage,
         handleOpenDialog,
@@ -65,16 +73,90 @@ export const UserManagement = () => {
         handleToggleStatusClick,
         handleToggleStatusConfirm,
         handleInputChange,
-        handleSwitchChange,
         handleSubmit,
-
-        // Dialog controls
-        setOpenDialog,
         setOpenDeleteDialog,
         setOpenStatusDialog,
     } = useUsers('/users', 'users');
 
-    // Helper functions for styling
+    const showSnackbar = (message, severity = 'success') => {
+        setSnackbar({
+            open: true,
+            message,
+            severity,
+        });
+    };
+
+    const handleCloseSnackbar = (event, reason) => {
+        if (reason === 'clickaway') {
+            return;
+        }
+        setSnackbar(prev => ({ ...prev, open: false }));
+    };
+
+    const handleEnhancedDeleteConfirm = async () => {
+        try {
+            await handleDeleteConfirm();
+            showSnackbar('User deleted successfully', 'success');
+        } catch (err) {
+            showSnackbar(err.message || 'Failed to delete user', 'error');
+        }
+    };
+
+    const handleEnhancedToggleConfirm = async () => {
+        setIsTogglingStatus(true);
+        try {
+            const result = await handleToggleStatusConfirm();
+            const action = userToToggle?.isActive ? 'deactivated' : 'activated';
+            showSnackbar(`User ${action} successfully`, 'success');
+            return result;
+        } catch (err) {
+            showSnackbar(err.message || 'Failed to update user status', 'error');
+            throw err;
+        } finally {
+            setIsTogglingStatus(false);
+        }
+    };
+
+    const handleEnhancedSubmit = async () => {
+        try {
+            const result = await handleSubmit();
+            const action = selectedUser ? 'updated' : 'created';
+            showSnackbar(`User ${action} successfully`, 'success');
+            return result;
+        } catch (err) {
+            showSnackbar(err.message || 'Failed to save user', 'error');
+            throw err;
+        }
+    };
+
+    const isSelfOperation = (targetUser) => {
+        return currentUser?.id === targetUser?.id;
+    };
+
+    const canEditUser = (targetUser) => {
+        return true;
+    };
+
+    const canDeleteUser = (targetUser) => {
+        if (isSelfOperation(targetUser)) {
+            return false;
+        }
+        return true;
+    };
+
+    const canToggleStatus = (targetUser) => {
+        if (isSelfOperation(targetUser)) {
+            return false;
+        }
+        if (targetUser?.role === 'superadmin') {
+            const superadminCount = users.filter(u => u.role === 'superadmin' && u.isActive).length;
+            if (superadminCount <= 1 && targetUser.isActive) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     const getRoleStyle = (role) => {
         switch (role) {
             case 'superadmin':
@@ -120,7 +202,6 @@ export const UserManagement = () => {
         }
     };
 
-    // Define columns for the table
     const columns = [
         {
             field: 'name',
@@ -152,6 +233,19 @@ export const UserManagement = () => {
                             }}
                         >
                             {user.name}
+                            {isSelfOperation(user) && (
+                                <Typography
+                                    component="span"
+                                    sx={{
+                                        ml: 1,
+                                        fontSize: '0.7rem',
+                                        color: BLUE_COLOR,
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    (You)
+                                </Typography>
+                            )}
                         </Typography>
                         <Typography
                             variant="caption"
@@ -240,64 +334,84 @@ export const UserManagement = () => {
             field: 'actions',
             header: 'Actions',
             align: 'right',
-            render: (user) => (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                    <Tooltip title="Edit User">
-                        <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(user)}
-                            disabled={user.id === 'superadmin'}
-                            sx={{
-                                color: BLUE_COLOR,
-                                padding: '4px',
-                                '&:hover': {
-                                    backgroundColor: `rgba(25, 118, 210, 0.1)`,
-                                },
-                            }}
-                        >
-                            <Edit size={16} />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title={user.isActive ? "Deactivate User" : "Activate User"}>
-                        <IconButton
-                            size="small"
-                            onClick={() => handleToggleStatusClick(user)}
-                            disabled={user.role === 'superadmin' ? isSuperAdmin?.id === user.id : false}
-                            sx={{
-                                color: user.isActive ? RED_COLOR : GREEN_COLOR,
-                                padding: '4px',
-                                '&:hover': {
-                                    backgroundColor: user.isActive
-                                        ? `rgba(239, 68, 68, 0.1)`
-                                        : `rgba(16, 185, 129, 0.1)`,
-                                },
-                            }}
-                        >
-                            {user.isActive ? <UserX size={16} /> : <UserCheck size={16} />}
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete User">
-                        <IconButton
-                            size="small"
-                            onClick={() => handleDeleteClick(user)}
-                            disabled={user.role === 'superadmin' ? isSuperAdmin?.id === user.id : false}
-                            sx={{
-                                color: RED_COLOR,
-                                padding: '4px',
-                                '&:hover': {
-                                    backgroundColor: `rgba(239, 68, 68, 0.1)`,
-                                },
-                            }}
-                        >
-                            <Trash2 size={16} />
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            ),
+            render: (user) => {
+                const isSelf = isSelfOperation(user);
+                const canEdit = canEditUser(user);
+                const canDelete = canDeleteUser(user);
+                const canToggle = canToggleStatus(user);
+
+                return (
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                        <Tooltip title={canEdit ? "Edit User" : "Cannot edit user"}>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenDialog(user)}
+                                    disabled={!canEdit}
+                                    sx={{
+                                        color: canEdit ? BLUE_COLOR : GRAY_COLOR,
+                                        padding: '4px',
+                                        '&:hover': canEdit ? {
+                                            backgroundColor: `rgba(25, 118, 210, 0.1)`,
+                                        } : {},
+                                    }}
+                                >
+                                    <Edit size={16} />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                        <Tooltip title={
+                            isSelf
+                                ? "Cannot modify your own status"
+                                : !canToggle
+                                    ? "Cannot deactivate the last superadmin"
+                                    : (user.isActive ? "Deactivate User" : "Activate User")
+                        }>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleToggleStatusClick(user)}
+                                    disabled={isSelf || !canToggle}
+                                    sx={{
+                                        color: (isSelf || !canToggle)
+                                            ? GRAY_COLOR
+                                            : (user.isActive ? RED_COLOR : GREEN_COLOR),
+                                        padding: '4px',
+                                        '&:hover': (!isSelf && canToggle) ? {
+                                            backgroundColor: user.isActive
+                                                ? `rgba(239, 68, 68, 0.1)`
+                                                : `rgba(16, 185, 129, 0.1)`,
+                                        } : {},
+                                    }}
+                                >
+                                    {user.isActive ? <UserX size={16} /> : <UserCheck size={16} />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                        <Tooltip title={isSelf ? "Cannot delete your own account" : canDelete ? "Delete User" : "Cannot delete user"}>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteClick(user)}
+                                    disabled={isSelf || !canDelete}
+                                    sx={{
+                                        color: (isSelf || !canDelete) ? GRAY_COLOR : RED_COLOR,
+                                        padding: '4px',
+                                        '&:hover': (!isSelf && canDelete) ? {
+                                            backgroundColor: `rgba(239, 68, 68, 0.1)`,
+                                        } : {},
+                                    }}
+                                >
+                                    <Trash2 size={16} />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    </Box>
+                );
+            },
         },
     ];
 
-    // Header actions component
     const headerActions = (
         <GradientButton
             variant="contained"
@@ -319,7 +433,6 @@ export const UserManagement = () => {
                 <meta name="description" content="Manage users and their roles" />
             </Helmet>
 
-            {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography
@@ -346,7 +459,6 @@ export const UserManagement = () => {
                 </Box>
             </Box>
 
-            {/* Reusable DataTable */}
             <DataTable
                 data={paginatedUsers}
                 columns={columns}
@@ -366,42 +478,94 @@ export const UserManagement = () => {
                 emptyStateDescription="Create one to get started."
             />
 
-            {/* Reusable Modals */}
             <UserFormModal
                 open={openDialog}
                 onClose={handleCloseDialog}
-                onSubmit={handleSubmit}
+                onSubmit={handleEnhancedSubmit}
                 selectedUser={selectedUser}
                 formData={formData}
                 onInputChange={handleInputChange}
-                onSwitchChange={handleSwitchChange}
                 title="User"
                 color={BLUE_COLOR}
+                disableRoleChange={isSelfOperation(selectedUser)}
+                warningText={isSelfOperation(selectedUser) ?
+                    "Note: You are editing your own account. You cannot change your role." :
+                    undefined}
             />
 
             <DeleteConfirmationModal
                 open={openDeleteDialog}
                 onClose={() => setOpenDeleteDialog(false)}
-                onConfirm={handleDeleteConfirm}
+                onConfirm={handleEnhancedDeleteConfirm}
                 item={userToDelete}
                 title="User"
+                warningText={
+                    isSelfOperation(userToDelete)
+                        ? "You cannot delete your own account. Please ask another administrator to perform this action."
+                        : undefined
+                }
+                disableConfirm={isSelfOperation(userToDelete)}
             />
 
             <StatusToggleModal
                 open={openStatusDialog}
                 onClose={() => setOpenStatusDialog(false)}
-                onConfirm={handleToggleStatusConfirm}
+                onConfirm={handleEnhancedToggleConfirm}
                 item={userToToggle}
+                isLoading={isTogglingStatus}
                 title="User"
+                itemNameKey="name"
             />
 
-            {/* Notification Snackbar */}
-            <NotificationSnackbar
-                success={success}
-                error={error}
-                onSuccessClose={() => setSuccess('')}
-                onErrorClose={() => setError('')}
-            />
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={handleCloseSnackbar}
+                anchorOrigin={{
+                    vertical: isMobile ? 'top' : 'bottom',
+                    horizontal: 'right',
+                }}
+            >
+                <Alert
+                    onClose={handleCloseSnackbar}
+                    severity={snackbar.severity}
+                    iconMapping={{
+                        success: <CheckCircle size={20} />,
+                        error: <AlertCircle size={20} />,
+                        warning: <AlertTriangle size={20} />,
+                        info: <AlertCircle size={20} />,
+                    }}
+                    sx={{
+                        width: '100%',
+                        borderRadius: '6px',
+                        backgroundColor: snackbar.severity === 'success'
+                            ? 'success'
+                            : snackbar.severity === 'error'
+                                ? 'error'
+                                : snackbar.severity === 'warning'
+                                    ? 'warning'
+                                    : 'info',
+                        borderLeft: `4px solid ${snackbar.severity === 'success' ? GREEN_COLOR :
+                            snackbar.severity === 'error' ? RED_COLOR :
+                                snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR}`,
+                        '& .MuiAlert-icon': {
+                            color: snackbar.severity === 'success' ? GREEN_COLOR :
+                                snackbar.severity === 'error' ? RED_COLOR :
+                                    snackbar.severity === 'warning' ? ORANGE_COLOR : BLUE_COLOR,
+                        },
+                        '& .MuiAlert-message': { py: 0.5 },
+                    }}
+                    elevation={6}
+                >
+                    <Typography sx={{
+                        fontSize: '0.85rem',
+                        fontWeight: 500,
+                        color: TEXT_COLOR,
+                    }}>
+                        {snackbar.message}
+                    </Typography>
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

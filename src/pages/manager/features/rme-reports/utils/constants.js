@@ -1,5 +1,5 @@
 export const TEXT_COLOR = '#0F1115';
-export const BLUE_COLOR = '#1976d2';
+export const BLUE_COLOR = '#1565C0';
 export const GREEN_COLOR = '#10b981';
 export const RED_COLOR = '#ef4444';
 export const ORANGE_COLOR = '#ed6c02';

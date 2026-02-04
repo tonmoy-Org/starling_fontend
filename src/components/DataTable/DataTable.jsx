@@ -12,10 +12,11 @@ import {
     Chip,
     Typography,
     alpha,
+    useTheme,
+    useMediaQuery,
 } from '@mui/material';
 import { Search, X, User } from 'lucide-react';
 
-// Default color constants
 const DEFAULT_COLORS = {
     text: '#0F1115',
     primary: '#1976d2',
@@ -25,7 +26,6 @@ const DEFAULT_COLORS = {
     gray: '#6b7280',
 };
 
-// Search Input Component
 const SearchInput = ({
     value,
     onChange,
@@ -99,7 +99,6 @@ const SearchInput = ({
     );
 };
 
-// Empty State Component
 const EmptyState = ({
     icon: Icon = User,
     title,
@@ -115,6 +114,7 @@ const EmptyState = ({
             alignItems: 'center',
             gap: 1,
             py: 6,
+            px: 2,
         }}>
             <Icon size={iconSize} color={iconColor} />
             <Typography
@@ -124,6 +124,7 @@ const EmptyState = ({
                     opacity: 0.6,
                     fontSize: '0.85rem',
                     fontWeight: 500,
+                    textAlign: 'center',
                 }}
             >
                 {title}
@@ -135,6 +136,9 @@ const EmptyState = ({
                         color: textColor,
                         opacity: 0.4,
                         fontSize: '0.75rem',
+                        textAlign: 'center',
+                        maxWidth: '300px',
+                        lineHeight: 1.4,
                     }}
                 >
                     {description}
@@ -144,13 +148,9 @@ const EmptyState = ({
     );
 };
 
-// Main DataTable Component
 export const DataTable = ({
-    // Data
     data = [],
     columns = [],
-
-    // Pagination
     pagination = true,
     page = 0,
     rowsPerPage = 10,
@@ -158,66 +158,50 @@ export const DataTable = ({
     rowsPerPageOptions = [5, 10, 25, 50],
     onPageChange,
     onRowsPerPageChange,
-
-    // Search
     search = true,
     searchValue = '',
     onSearchChange,
     searchPlaceholder = 'Search...',
-
-    // Header
     title = '',
     subtitle = '',
     showCount = true,
     headerActions = null,
-
-    // Styling
     color = DEFAULT_COLORS.primary,
     borderColor = null,
     elevation = 0,
     minWidth = 800,
-
-    // Loading & Empty States
     loading = false,
     loadingComponent = null,
     emptyStateTitle = 'No data found.',
     emptyStateDescription = '',
     emptyStateIcon = User,
-
-    // Custom rendering
     renderRow,
     renderHeader = null,
     renderFooter = null,
-
-    // Mobile
-    isMobile = false,
-
-    // Callbacks
+    isMobile: externalIsMobile,
     onRowClick,
-
-    // Additional props
     sx = {},
     tableSx = {},
     containerSx = {},
 }) => {
-    // Use provided border color or derive from primary color
+    const theme = useTheme();
+    const internalIsMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isMobile = externalIsMobile !== undefined ? externalIsMobile : internalIsMobile;
+
     const tableBorderColor = borderColor || alpha(color, 0.15);
     const headerBgColor = alpha(color, 0.04);
     const headerBorderColor = alpha(color, 0.1);
 
-    // Calculate showing count
     const showingCount = pagination
         ? Math.min((page * rowsPerPage) + rowsPerPage, totalCount || data.length)
         : data.length;
 
-    // Handle row click
     const handleRowClick = (row, index) => {
         if (onRowClick) {
             onRowClick(row, index);
         }
     };
 
-    // Render default row if no custom renderRow provided
     const renderDefaultRow = (row, index) => {
         return (
             <TableRow
@@ -238,7 +222,12 @@ export const DataTable = ({
                     <TableCell
                         key={colIndex}
                         align={column.align || 'left'}
-                        sx={column.sx || {}}
+                        sx={{
+                            py: isMobile ? 1.25 : 1.75,
+                            px: isMobile ? 1 : 2,
+                            fontSize: isMobile ? '0.75rem' : '0.875rem',
+                            ...column.sx,
+                        }}
                     >
                         {column.render ? column.render(row) : row[column.field]}
                     </TableCell>
@@ -252,70 +241,80 @@ export const DataTable = ({
             elevation={elevation}
             sx={{
                 mb: 4,
-                borderRadius: '6px',
+                borderRadius: isMobile ? '4px' : '6px',
                 overflow: 'hidden',
                 border: `1px solid ${tableBorderColor}`,
                 bgcolor: 'white',
+                width: '100%',
                 ...sx,
             }}
         >
-            {/* Header Section */}
             {(title || search || headerActions) && (
                 <Box
                     sx={{
-                        p: isMobile ? 1 : 1.5,
+                        p: isMobile ? 1.25 : 2,
                         bgcolor: 'white',
                         borderBottom: `1px solid ${headerBorderColor}`,
                         display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
                         flexDirection: isMobile ? 'column' : 'row',
-                        gap: isMobile ? 1 : 0,
+                        justifyContent: 'space-between',
+                        alignItems: isMobile ? 'stretch' : 'center',
+                        gap: isMobile ? 1.5 : 2,
                     }}
                 >
-                    {/* Left side - Title and count */}
+                    {/* Left Section - Title & Subtitle */}
                     <Box sx={{
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        width: isMobile ? '100%' : 'auto',
-                        justifyContent: isMobile ? 'space-between' : 'flex-start'
+                        flexDirection: 'column',
+                        gap: 0.75,
+                        flex: isMobile ? '1 1 auto' : '0 1 auto',
+                        minWidth: 0, // For text truncation
                     }}>
                         {title && (
-                            <Typography
-                                sx={{
-                                    fontSize: isMobile ? '0.85rem' : '1rem',
-                                    color: DEFAULT_COLORS.text,
-                                    fontWeight: 600,
-                                }}
-                            >
-                                {title}
+                            <Box sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                flexWrap: 'wrap',
+                            }}>
+                                <Typography
+                                    variant="h6"
+                                    sx={{
+                                        fontSize: isMobile ? '0.95rem' : '1.1rem',
+                                        color: DEFAULT_COLORS.text,
+                                        fontWeight: 600,
+                                        lineHeight: 1.3,
+                                    }}
+                                >
+                                    {title}
+                                </Typography>
                                 {showCount && (
                                     <Chip
                                         size="small"
                                         label={totalCount || data.length}
                                         sx={{
-                                            ml: 1,
                                             bgcolor: alpha(color, 0.08),
                                             color: DEFAULT_COLORS.text,
-                                            fontSize: '0.75rem',
+                                            fontSize: isMobile ? '0.7rem' : '0.75rem',
                                             fontWeight: 500,
                                             height: '22px',
                                             '& .MuiChip-label': {
-                                                px: 1,
+                                                px: 1.25,
+                                                py: 0.25,
                                             },
                                         }}
                                     />
                                 )}
-                            </Typography>
+                            </Box>
                         )}
                         {subtitle && (
                             <Typography
                                 variant="body2"
                                 sx={{
                                     color: DEFAULT_COLORS.gray,
-                                    fontSize: '0.8rem',
+                                    fontSize: isMobile ? '0.75rem' : '0.8rem',
                                     fontWeight: 400,
+                                    lineHeight: 1.4,
                                 }}
                             >
                                 {subtitle}
@@ -323,85 +322,107 @@ export const DataTable = ({
                         )}
                     </Box>
 
-                    {/* Right side - Search and actions */}
+                    {/* Right Section - Search & Actions */}
                     <Box sx={{
-                        display: { md: 'flex' },
-                        alignItems: 'center',
+                        display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
                         gap: 1.5,
-                        width: isMobile ? '100%' : 'auto',
-                        justifyContent: isMobile ? 'space-between' : 'flex-end'
+                        flex: isMobile ? '1 1 auto' : '0 1 auto',
+                        minWidth: isMobile ? '100%' : 'auto',
+                        alignItems: 'stretch',
                     }}>
-                        <Box sx={{
-                            display: 'flex',
-                            gap: 1,
-                            width: isMobile ? '100%' : 'auto',
-                            flexDirection: isMobile ? 'column' : 'row',
-                            mt: isMobile ? 1 : 0
-                        }}>
-                            {search && (
-                                <SearchInput
-                                    value={searchValue}
-                                    onChange={onSearchChange}
-                                    placeholder={searchPlaceholder}
-                                    color={color}
-                                    fullWidth={isMobile}
-                                />
-                            )}
-                            {headerActions && headerActions}
-                        </Box>
+                        {search && (
+                            <SearchInput
+                                value={searchValue}
+                                onChange={onSearchChange}
+                                placeholder={searchPlaceholder}
+                                color={color}
+                                fullWidth={isMobile}
+                                sx={{
+                                    minWidth: isMobile ? '100%' : 280,
+                                }}
+                            />
+                        )}
+
+                        {headerActions && (
+                            <Box sx={{
+                                display: 'flex',
+                                gap: 1,
+                                alignItems: 'center',
+                                justifyContent: isMobile ? 'stretch' : 'flex-end',
+                                '& > *': {
+                                    flex: isMobile ? 1 : '0 0 auto',
+                                }
+                            }}>
+                                {headerActions}
+                            </Box>
+                        )}
                     </Box>
                 </Box>
             )}
 
-            {/* Custom Header Render */}
             {renderHeader && renderHeader()}
 
-            {/* Table Container */}
-            <TableContainer sx={{
-                overflowX: 'auto',
-                '&::-webkit-scrollbar': {
-                    height: '8px',
-                },
-                '&::-webkit-scrollbar-track': {
-                    backgroundColor: alpha(color, 0.05),
-                },
-                '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: alpha(color, 0.2),
-                    borderRadius: '4px',
-                },
-                ...containerSx,
-            }}>
-                {/* Loading State */}
+            <TableContainer
+                component={Paper}
+                elevation={0}
+                sx={{
+                    overflowX: 'auto',
+                    maxWidth: '100%',
+                    position: 'relative',
+                    '&::-webkit-scrollbar': {
+                        height: '8px',
+                        width: '8px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                        backgroundColor: alpha(color, 0.05),
+                        borderRadius: '4px',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: alpha(color, 0.2),
+                        borderRadius: '4px',
+                        '&:hover': {
+                            backgroundColor: alpha(color, 0.3),
+                        },
+                    },
+                    ...containerSx,
+                }}
+            >
                 {loading && loadingComponent}
 
-                {/* Data Table */}
                 {!loading && (
                     <Table
-                        size="small"
+                        size={isMobile ? 'small' : 'medium'}
                         sx={{
-                            minWidth: isMobile ? minWidth : 'auto',
-                            ...tableSx
+                            minWidth: isMobile ? 600 : minWidth,
+                            '& .MuiTableCell-root': {
+                                transition: 'all 0.2s ease',
+                            },
+                            ...tableSx,
                         }}
                     >
-                        {/* Table Head */}
                         <TableHead>
                             <TableRow sx={{
                                 bgcolor: headerBgColor,
                                 '& th': {
                                     borderBottom: `2px solid ${headerBorderColor}`,
-                                    py: 1.5,
-                                    px: 1.5,
-                                    fontSize: isMobile ? '0.75rem' : '0.8rem',
+                                    py: isMobile ? 1.25 : 1.75,
+                                    px: isMobile ? 1 : 2,
+                                    fontSize: isMobile ? '0.75rem' : '0.85rem',
                                     fontWeight: 600,
                                     color: DEFAULT_COLORS.text,
                                     whiteSpace: 'nowrap',
+                                    letterSpacing: '0.025em',
                                 }
                             }}>
                                 {columns.map((column, index) => (
                                     <TableCell
                                         key={index}
                                         align={column.align || 'left'}
-                                        sx={column.headerSx || {}}
+                                        sx={{
+                                            minWidth: column.minWidth || (isMobile ? 100 : 120),
+                                            ...column.headerSx,
+                                        }}
                                     >
                                         {column.header}
                                     </TableCell>
@@ -409,14 +430,13 @@ export const DataTable = ({
                             </TableRow>
                         </TableHead>
 
-                        {/* Table Body */}
                         <TableBody>
-                            {/* Empty State */}
                             {data.length === 0 && !loading && (
                                 <TableRow>
                                     <TableCell
                                         colSpan={columns.length}
                                         align="center"
+                                        sx={{ py: 6 }}
                                     >
                                         <EmptyState
                                             icon={emptyStateIcon}
@@ -427,7 +447,6 @@ export const DataTable = ({
                                 </TableRow>
                             )}
 
-                            {/* Data Rows */}
                             {data.length > 0 && data.map((row, index) => (
                                 renderRow
                                     ? renderRow(row, index)
@@ -437,7 +456,6 @@ export const DataTable = ({
                     </Table>
                 )}
 
-                {/* Pagination */}
                 {pagination && totalCount > 0 && (
                     <TablePagination
                         rowsPerPageOptions={rowsPerPageOptions}
@@ -450,46 +468,70 @@ export const DataTable = ({
                         sx={{
                             borderTop: `1px solid ${headerBorderColor}`,
                             '& .MuiTablePagination-toolbar': {
-                                minHeight: '44px',
+                                minHeight: '52px',
+                                px: isMobile ? 1 : 2,
+                                flexDirection: isMobile ? 'column' : 'row',
+                                gap: isMobile ? 1 : 0,
+                                alignItems: isMobile ? 'flex-start' : 'center',
                             },
                             '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
                                 fontSize: isMobile ? '0.75rem' : '0.8rem',
+                                mb: isMobile ? 0.5 : 0,
+                            },
+                            '& .MuiTablePagination-actions': {
+                                marginLeft: isMobile ? 'auto' : 0,
+                            },
+                            '& .MuiTablePagination-selectRoot': {
+                                mr: 1,
                             },
                         }}
                     />
                 )}
             </TableContainer>
 
-            {/* Custom Footer Render */}
             {renderFooter && renderFooter()}
 
-            {/* Showing Count (if not using pagination) */}
             {!pagination && data.length > 0 && (
                 <Box
                     sx={{
-                        p: 1,
+                        p: isMobile ? 1.25 : 2,
                         borderTop: `1px solid ${headerBorderColor}`,
                         bgcolor: alpha(color, 0.02),
                         display: 'flex',
-                        justifyContent: 'flex-end',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 1,
                     }}
                 >
                     <Typography
                         variant="caption"
                         sx={{
                             color: DEFAULT_COLORS.gray,
-                            fontSize: '0.75rem',
+                            fontSize: isMobile ? '0.7rem' : '0.75rem',
+                            fontWeight: 400,
                         }}
                     >
                         Showing {showingCount} of {totalCount || data.length} items
                     </Typography>
+
+                    {headerActions && isMobile && (
+                        <Box sx={{
+                            display: 'flex',
+                            gap: 1,
+                            '& > *': {
+                                flex: 1,
+                            }
+                        }}>
+                            {headerActions}
+                        </Box>
+                    )}
                 </Box>
             )}
         </Paper>
     );
 };
 
-// Helper HOC for common table configurations
 export const withUserTable = (Component) => {
     return (props) => {
         const { color = DEFAULT_COLORS.primary, ...rest } = props;
@@ -497,7 +539,6 @@ export const withUserTable = (Component) => {
     };
 };
 
-// Pre-configured table types
 export const UserManagementTable = (props) => (
     <DataTable
         color={DEFAULT_COLORS.primary}

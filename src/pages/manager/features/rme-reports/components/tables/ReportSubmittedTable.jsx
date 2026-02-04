@@ -152,9 +152,6 @@ const ReportSubmittedTable = ({
                                 Edit
                             </TableCell>
                             <TableCell align="center" sx={{ minWidth: 80 }}>
-                                Septic Components
-                            </TableCell>
-                            <TableCell align="center" sx={{ minWidth: 80 }}>
                                 {isMobile ? 'Lock' : 'LOCKED'}
                             </TableCell>
                             <TableCell align="center" sx={{ minWidth: 100 }}>
@@ -329,29 +326,6 @@ const ReportSubmittedTable = ({
                                                         <img
                                                             src={penIcon}
                                                             alt="edit"
-                                                            style={{
-                                                                width: '20px',
-                                                                height: '20px',
-                                                            }}
-                                                        />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </TableCell>
-                                            <TableCell align="center" sx={{ py: 1 }}>
-                                                <Tooltip title="Update Septic Components & System Information">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleUpdateClick(item)}
-                                                        sx={{
-                                                            color: BLUE_COLOR,
-                                                            '&:hover': {
-                                                                backgroundColor: alpha(BLUE_COLOR, 0.1),
-                                                            },
-                                                        }}
-                                                    >
-                                                        <img
-                                                            src={updateIonIcon}
-                                                            alt="update"
                                                             style={{
                                                                 width: '20px',
                                                                 height: '20px',

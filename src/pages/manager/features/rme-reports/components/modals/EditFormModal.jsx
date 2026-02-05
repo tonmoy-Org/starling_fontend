@@ -1174,7 +1174,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                                 {workOrderData?.date || 'N/A'}
                             </Typography>
                         </Box>
-                        {!showComponentForm &&
+                        {/* {!showComponentForm &&
 
                             < Box sx={{
                                 flex: '0 0 auto',
@@ -1196,7 +1196,7 @@ const EditFormModal = ({ open, onClose, workOrderData, onSave, showSnackbar }) =
                                     Add Component
                                 </GradientButton>
                             </Box>
-                        }
+                        } */}
                     </Box>
                 </Box>
 

@@ -41,6 +41,8 @@ const FinalizedTable = ({
     const allSelectedOnPage = items.length > 0 && items.every(item => selected.has(item.id));
     const someSelectedOnPage = items.length > 0 && items.some(item => selected.has(item.id));
 
+    console.log('items:', items);
+
     return (
         <TableContainer sx={{
             overflowX: 'auto',
@@ -206,13 +208,7 @@ const FinalizedTable = ({
                                             fontWeight: 500,
                                             fontSize: '0.85rem',
                                         }}>
-                                            {formatDate(item.actionTime)}
-                                        </Typography>
-                                        <Typography variant="caption" sx={{
-                                            color: GRAY_COLOR,
-                                            fontSize: '0.8rem',
-                                        }}>
-                                            {formatTime(item.actionTime)}
+                                            {item.finalizedDateFormatted}
                                         </Typography>
                                     </TableCell>
                                     <TableCell sx={{ py: 1.5 }}>
